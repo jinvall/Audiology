@@ -1,0 +1,73 @@
+# Audiology2 - Android Audio Streaming & Editor App
+# .gitignore
+
+# Build artifacts
+*.apk
+*.ap_
+*.aab
+*.aap
+*.aas
+*.aasb
+*.aasc
+*.aar
+*.zip
+*.war
+*.ear
+*.jar
+*.class
+*.dex
+*.odex
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Local configuration
+local.properties
+*.keystore
+!**/debug.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Android
+*.apk
+*.ap_
+*.aab
+*.aap
+*.aas
+*.aasb
+*.aasc
+*.aar
+
+# Kotlin
+*.kt~
+
+# Build outputs
+app/build/
+app/.gradle/
+
+# Test reports
+app/build/reports/
+
+# Generated files
+app/src/main/java/com/audiology2/stream/databinding/
+
+# Keystore (don't commit release keystore)
+# audiology2-release.keystore
