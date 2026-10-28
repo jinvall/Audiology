@@ -266,6 +266,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnLoop.setOnClickListener { toggleLoop() }
         
         // Export/Import
+        binding.btnProjects.setOnClickListener { showProjectsDialog() }
         binding.btnExport.setOnClickListener { showExportDialog() }
         binding.btnImport.setOnClickListener { showImportDialog() }
         
@@ -394,7 +395,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             binding.timelineTimeDisplay.text = formatTime(time) + " / " + formatTime(audioPlayer.getDurationSec())
         }
         binding.trackTimelineView.onTrackSelect = { track ->
-            Log.d("Editor", "Selected track: ${track.name}")
+            showTrackPropertiesDialog(track)
         }
         binding.trackTimelineView.onClipSelect = { clip ->
             Log.d("Editor", "Selected clip: ${clip.name}")
@@ -941,6 +942,93 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         dialog.show()
     }
 
+    // ===== Track properties =====
+
+    private fun showTrackPropertiesDialog(track: Track) {
+        val context = this
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 16, 24, 8)
+        }
+
+        val nameEdit = EditText(context).apply {
+            setText(track.name)
+            hint = "Track name"
+        }
+        root.addView(TextView(context).apply { text = "Name" })
+        root.addView(nameEdit)
+
+        val volumeLabel = TextView(context).apply { text = "Volume: ${(track.gain * 100).toInt()}%" }
+        val volumeBar = SeekBar(context).apply {
+            max = 200
+            progress = (track.gain * 100).toInt().coerceIn(0, 200)
+        }
+        root.addView(volumeLabel)
+        root.addView(volumeBar)
+
+        val panLabel = TextView(context).apply { text = "Pan: ${(track.pan * 100).toInt()} (L-100 .. R+100)" }
+        val panBar = SeekBar(context).apply {
+            max = 200
+            progress = ((track.pan + 1.0) * 100).toInt().coerceIn(0, 200)
+        }
+        root.addView(panLabel)
+        root.addView(panBar)
+
+        val muteCb = CheckBox(context).apply { text = "Mute"; isChecked = track.muted }
+        val soloCb = CheckBox(context).apply { text = "Solo"; isChecked = track.solo }
+        val armCb = CheckBox(context).apply { text = "Record armed"; isChecked = track.armed }
+        val monitorCb = CheckBox(context).apply { text = "Input monitor"; isChecked = track.monitor }
+        root.addView(muteCb)
+        root.addView(soloCb)
+        root.addView(armCb)
+        root.addView(monitorCb)
+
+        volumeBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                volumeLabel.text = "Volume: ${p}%"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+        panBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                val pan = (p / 100.0) - 1.0
+                val side = if (pan < -0.05) "L${(-pan * 100).toInt()}" else if (pan > 0.05) "R${(pan * 100).toInt()}" else "C"
+                panLabel.text = "Pan: $side"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+
+        AlertDialog.Builder(context, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Track — ${track.name}")
+            .setView(root)
+            .setPositiveButton("Apply", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+            .also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val updatedTrack = track.copy(
+                            name = nameEdit.text.toString().trim().ifEmpty { track.name },
+                            gain = volumeBar.progress / 100f,
+                            pan = ((panBar.progress / 100.0) - 1.0).toFloat(),
+                            muted = muteCb.isChecked,
+                            solo = soloCb.isChecked,
+                            armed = armCb.isChecked,
+                            monitor = monitorCb.isChecked
+                        )
+                        val updated = ProjectManager.updateCurrentProject { it.updateTrack(updatedTrack) }
+                        binding.trackTimelineView.setProject(updated)
+                        binding.trackTimelineView.postInvalidate()
+                        dialog.dismiss()
+                        Toast.makeText(context, "Track updated", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                dialog.show()
+            }
+    }
+
     // ===== Record → beat sample =====
 
     private fun makeSampleFromSelection() {
@@ -1024,11 +1112,26 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         }
     }
 
+    /** True when the given track is audible given mute/solo rules. */
+    private fun isTrackAudible(track: Track, project: AudioProject): Boolean {
+        if (track.muted) return false
+        val anySolo = project.tracks.any { it.solo }
+        if (anySolo && !track.solo) return false
+        return true
+    }
+
     private fun startPlayback() {
-        // Load selected clip or first clip for playback
-        val clip = binding.trackTimelineView.currentSelectedClipId
+        val project = ProjectManager.getCurrentProject()
+        // Load selected clip or first audible clip for playback
+        val selectedClip = binding.trackTimelineView.currentSelectedClipId
             ?.let { binding.trackTimelineView.findClip(it) }
-            ?: ProjectManager.getCurrentProject()?.tracks?.firstOrNull()?.clips?.firstOrNull()
+        val clip = when {
+            selectedClip != null && project != null -> {
+                val t = project.getTrack(selectedClip.trackId)
+                if (t != null && isTrackAudible(t, project)) selectedClip else null
+            }
+            else -> null
+        } ?: project?.tracks?.firstOrNull { isTrackAudible(it, project) }?.clips?.firstOrNull()
             ?: return
         
         if (audioPlayer.loadFile(java.io.File(clip.sourcePath))) {
@@ -1167,7 +1270,80 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     }
 
     // ---- Export/Import ----
-    
+
+    private fun showProjectsDialog() {
+        refreshProjectsDialog()
+    }
+
+    private fun refreshProjectsDialog() {
+        val projects = ProjectManager.getProjects()
+        if (projects.isEmpty()) {
+            Toast.makeText(this, "No saved projects yet", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val names = projects.map { p ->
+            val d = java.text.SimpleDateFormat("MMM d HH:mm", java.util.Locale.US)
+                .format(java.util.Date(p.modifiedAt))
+            val star = if (p.id == ProjectManager.getCurrentProject()?.id) " ★" else ""
+            "${p.name}$star  (${d})"
+        }.toTypedArray()
+
+        fun openP(i: Int) {
+            val project = projects[i]
+            ProjectManager.setCurrentProject(project)
+            binding.trackTimelineView.setProject(project)
+            binding.trackTimelineView.postInvalidate()
+            stopPlayback()
+            snapGrid.tempo = project.tempo
+            snapGrid.timeSignatureNumerator = project.timeSignatureNumerator
+            snapGrid.timeSignatureDenominator = project.timeSignatureDenominator
+            binding.trackTimelineView.setSnapGrid(snapGrid)
+            Toast.makeText(this, "Opened ${project.name}", Toast.LENGTH_SHORT).show()
+            refreshProjectsDialog()
+        }
+
+        val selected = projects.indexOfFirst { it.id == ProjectManager.getCurrentProject()?.id }
+        val builder = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Projects (${projects.size})")
+            .setSingleChoiceItems(names, selected) { _, which -> openP(which) }
+            .setPositiveButton("New", null)
+            .setNegativeButton("Close", null)
+        val listDialog = builder.create()
+        listDialog.setOnShowListener {
+            listDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                listDialog.dismiss()
+                promptProjectName("New project name", "") { name ->
+                    ProjectManager.createNewProject(name.ifBlank { "Session" })
+                    binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
+                    binding.trackTimelineView.postInvalidate()
+                    refreshProjectsDialog()
+                }
+            }
+        }
+        listDialog.show()
+    }
+
+    private fun promptProjectName(title: String, initial: String, onOk: (String) -> Unit) {
+        val input = EditText(this).apply {
+            setText(initial)
+            hint = "Project name"
+            setPadding(24, 16, 24, 16)
+        }
+        val d = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle(title)
+            .setView(input)
+            .setPositiveButton("OK", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+        d.setOnShowListener {
+            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                onOk(input.text.toString().trim())
+                d.dismiss()
+            }
+        }
+        d.show()
+    }
+
     private fun showExportDialog() {
         val project = ProjectManager.getCurrentProject() ?: return
         val formats = listOf(

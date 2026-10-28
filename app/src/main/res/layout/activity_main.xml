@@ -1334,6 +1334,14 @@
 
                 <!-- Export/Import -->
                 <ImageButton
+                    android:id="@+id/btnProjects"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Projects"
+                    android:src="@android:drawable/ic_menu_agenda" />
+
+                <ImageButton
                     android:id="@+id/btnExport"
                     android:layout_width="48dp"
                     android:layout_height="48dp"

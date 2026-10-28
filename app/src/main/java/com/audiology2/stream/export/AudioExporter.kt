@@ -217,8 +217,14 @@ class TrackMixer(
     sampleRate: Int
 ) {
     private val tracks = project.tracks.map { track ->
-        TrackPlayer(track, sampleRate)
+        TrackPlayer(track, sampleRate, audible = isAudible(track, project.tracks))
     }.filter { it.hasAudio }.toList()
+
+    private fun isAudible(track: Track, all: List<Track>): Boolean {
+        if (track.muted) return false
+        val anySolo = all.any { it.solo }
+        return !anySolo || track.solo
+    }
     
     private var currentFrame = 0L
     
@@ -257,7 +263,9 @@ class TrackMixer(
 /** Plays a single track's clips */
 class TrackPlayer(
     private val track: Track,
-    private val sampleRate: Int
+    private val sampleRate: Int,
+    /** When false the player outputs silence (muted / non-soloed track). */
+    private val audible: Boolean = true
 ) {
     private val clips = track.clips.sortedBy { it.startTime }
     private var currentClipIndex = 0
@@ -265,8 +273,15 @@ class TrackPlayer(
     private var currentFrame = 0L
     
     val hasAudio: Boolean = clips.any { it.duration > 0 }
-    
+
     fun readFrames(buffer: FloatArray, maxFrames: Int): Int {
+        if (!audible) {
+            // Output silence but advance the transport clock as if playing.
+            val frames = minOf(maxFrames, ((track.duration * sampleRate) - currentFrame).toInt())
+            if (frames <= 0) return 0
+            currentFrame += frames
+            return frames
+        }
         if (currentClipIndex >= clips.size) return 0
         
         val clip = clips[currentClipIndex]

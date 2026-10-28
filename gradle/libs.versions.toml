@@ -9,7 +9,7 @@ datastore = "1.1.1"
 lifecycle = "2.7.0"
 coroutines = "1.7.3"
 junit = "4.13.2"
-kotlin-test = "2.1.0"
+kotlin-test = "1.9.20"
 espresso = "3.5.1"
 room = "2.6.1"
 
