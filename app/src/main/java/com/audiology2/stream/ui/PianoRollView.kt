@@ -370,6 +370,16 @@ class PianoRollView @JvmOverloads constructor(
         onClipChanged?.invoke(updated)
     }
 
+    /** Insert a note programmatically (e.g. spectral capture) and persist. */
+    fun addNote(note: MidiNote) {
+        val c = clip ?: return
+        val updated = c.withNotes(c.notes + note)
+        selectedNoteId = note.id
+        setClip(updated, bpm)
+        postInvalidate()
+        onClipChanged?.invoke(updated)
+    }
+
     // ---- Drawing ----
 
     override fun onDraw(canvas: Canvas) {

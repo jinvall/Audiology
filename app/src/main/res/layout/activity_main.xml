@@ -1148,6 +1148,122 @@
                 android:backgroundTint="@color/srp_danger" />
         </LinearLayout>
 
+        <!-- ===== Spectral Tools ===== -->
+        <LinearLayout
+            android:id="@+id/header_spectral"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="SPECTRAL TOOLS"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_spectral"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_spectral"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/spectralPitchLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Pitch: --"
+                android:textColor="@color/srp_text"
+                android:textSize="16sp"
+                android:fontFamily="monospace" />
+
+            <ProgressBar
+                android:id="@+id/spectralTunerBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="12dp"
+                android:layout_marginTop="2dp"
+                android:max="100"
+                android:progress="50" />
+
+            <TextView
+                android:id="@+id/spectralPeakLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Peak: --"
+                android:textColor="@color/srp_text"
+                android:textSize="13sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/spectralF0Label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="F0: --"
+                android:textColor="@color/srp_text"
+                android:textSize="13sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/spectralCentroidLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Centroid: --"
+                android:textColor="@color/srp_text"
+                android:textSize="13sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/spectralPartialsLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Partials: --"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:maxLines="4" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp">
+
+                <Button
+                    android:id="@+id/btnSpectralCapture"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:text="Capture → MIDI note" />
+
+                <Button
+                    android:id="@+id/btnSpectralCopy"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Copy peak" />
+            </LinearLayout>
+        </LinearLayout>
+
         <!-- ===== Editor / Timeline ===== -->
         <LinearLayout
             android:id="@+id/header_editor"

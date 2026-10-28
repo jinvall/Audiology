@@ -92,6 +92,14 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     /** Most recently finished recording file (source for spectrogram selections). */
     private var lastRecordingPath: java.io.File? = null
 
+    // ---- Spectral tools state (updated on the capture thread, read on main) ----
+    private var lastSpectrum: FloatArray? = null
+    private var spectrumSampleRate = 48000
+    private var spectrumFftSize = 2048
+    private var lastSpectralUpdateMs = 0L
+    @Volatile
+    private var spectralSnapshot: SpectralSnapshot? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Force LTR before super.onCreate so window is configured before view inflation
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
@@ -143,6 +151,17 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 val frames = fftProcessor.process(samples, framesRead, channels)
                 frames?.let { spectrogramFrames ->
                     binding.mainSpectrogramView.updateSpectrogram(spectrogramFrames, sr, fftProcessor.fftSize)
+
+                    // Spectral analysis (throttled to ~6 Hz, capture thread).
+                    val now = System.currentTimeMillis()
+                    if (now - lastSpectralUpdateMs >= 160) {
+                        lastSpectralUpdateMs = now
+                        lastSpectrum = spectrogramFrames.lastOrNull()
+                        spectrumSampleRate = sr
+                        spectrumFftSize = fftProcessor.fftSize
+                        spectralSnapshot = computeSpectralSnapshot()
+                        binding.mainSpectrogramView.post { updateSpectralUi() }
+                    }
                 }
                 binding.mainSpectrogramView.postInvalidate()
             }
@@ -418,6 +437,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnMakeSample.setOnClickListener { makeSampleFromSelection() }
         binding.btnAddMidi.setOnClickListener { addMidiClip() }
         binding.trackTimelineView.onMidiClipTap = { midi -> openMidiEditor(midi) }
+        binding.btnSpectralCapture.setOnClickListener { capturePitchToMidi() }
+        binding.btnSpectralCopy.setOnClickListener { copyPeakToClipboard() }
         setupMidiEditor()
         
         binding.btnZoomFit.setOnClickListener { binding.trackTimelineView.zoomToFit() }
@@ -1477,6 +1498,118 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         else String.format("%d.%03d", secs, ms)
     }
 
+    // ---- Spectral tools ----
+
+    /** Immutable analysis result for one spectrum frame. */
+    data class SpectralSnapshot(
+        val noteName: String,
+        val cents: Int,
+        val midi: Int?,
+        val peakFreq: Double,
+        val peakDb: Double,
+        val f0: Double?,
+        val centroid: Double,
+        val partialsText: String
+    )
+
+    /** Run analysis on the latest stored magnitude frame (capture thread, cheap). */
+    private fun computeSpectralSnapshot(): SpectralSnapshot? {
+        val frame = lastSpectrum ?: return null
+        val sr = spectrumSampleRate
+        val fft = spectrumFftSize
+        val peak = com.audiology2.stream.dsp.SpectralEngine.peak(frame, sr, fft)
+        val f0 = com.audiology2.stream.dsp.SpectralEngine.fundamental(frame, sr, fft)
+        val centroid = com.audiology2.stream.dsp.SpectralEngine.centroid(frame, sr, fft)
+        val fForNote = f0 ?: peak?.freq
+        val note = fForNote?.let { com.audiology2.stream.dsp.SpectralEngine.noteFromFreq(it) }
+        val partials = com.audiology2.stream.dsp.SpectralEngine.partials(frame, sr, fft, topN = 6)
+        val partialsText = partials.joinToString(" ") { "${it.freq.roundToInt()}Hz(${"%.0f".format(it.db)}dB)" }
+        return SpectralSnapshot(
+            noteName = note?.name ?: "--",
+            cents = note?.cents ?: 0,
+            midi = note?.midi,
+            peakFreq = peak?.freq ?: 0.0,
+            peakDb = peak?.db ?: -140.0,
+            f0 = f0,
+            centroid = centroid,
+            partialsText = partialsText
+        )
+    }
+
+    /** Push the latest snapshot into the card (main thread). */
+    private fun updateSpectralUi() {
+        val s = spectralSnapshot ?: return
+        binding.spectralPitchLabel.text = "Pitch: ${s.noteName}  (${if (s.cents >= 0) "+" else ""}${s.cents} cent)"
+        // Tuner: progress 50 = in tune, +/-25 ~ +/-25 cents.
+        binding.spectralTunerBar.progress = (50 + s.cents.coerceIn(-50, 50)).coerceIn(0, 100)
+        binding.spectralPeakLabel.text = "Peak: ${String.format("%.1f", s.peakFreq)} Hz at ${String.format("%.0f", s.peakDb)} dB"
+        binding.spectralF0Label.text = "F0: ${s.f0?.let { String.format("%.1f", it) + " Hz" } ?: "--"}"
+        binding.spectralCentroidLabel.text = "Centroid: ${String.format("%.0f", s.centroid)} Hz"
+        binding.spectralPartialsLabel.text = "Partials: ${s.partialsText.ifEmpty { "--" }}"
+    }
+
+    private fun copyPeakToClipboard() {
+        val s = spectralSnapshot ?: run {
+            Toast.makeText(this, "No live spectrum yet - start streaming", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val text = String.format("%.1f Hz (note %s)", s.peakFreq, s.noteName)
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("peak", text))
+        Toast.makeText(this, "Copied $text", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Add the detected pitch as a note in the open MIDI clip (or create/route one). */
+    private fun capturePitchToMidi() {
+        val s = spectralSnapshot ?: run {
+            Toast.makeText(this, "No live spectrum yet - start streaming", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val midiPitch = s.midi ?: run {
+            Toast.makeText(this, "No pitched signal detected", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val project = ProjectManager.getCurrentProject() ?: return
+        val tempo = project.tempo
+
+        val existing = currentMidiClip()
+        if (existing != null) {
+            // Place at the playhead, clip-relative.
+            val playhead = binding.trackTimelineView.currentPlayheadTime
+            val relSec = (playhead - existing.startTime).coerceAtLeast(0.0)
+            val tick = existing.tickAt(relSec, tempo)
+                .coerceAtLeast(existing.endTick)
+            binding.pianoRollView.addNote(MidiNote(startTick = tick, durationTicks = existing.ticksPerBeat / 2L, pitch = midiPitch, velocity = 100))
+            Toast.makeText(this, "Note ${s.noteName} added to ${existing.name}", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // No open MIDI clip: put it in the Beats track (or first track).
+        var track = project.tracks.firstOrNull { it.name.equals("Beats", ignoreCase = true) }
+            ?: project.tracks.firstOrNull()
+        var work = project
+        if (track == null) {
+            work = project.addTrack(name = "Beats", color = 0xFFFFD700.toInt())
+            track = work.tracks.last()
+        }
+        val start = if (binding.trackTimelineView.currentPlayheadTime > 0) {
+            binding.trackTimelineView.currentPlayheadTime
+        } else track.duration
+        val base = MidiClip(
+            name = "Captured ${s.noteName}",
+            startTime = start,
+            trackId = track.id
+        )
+        val midi = base.copy(notes = listOf(MidiNote(startTick = 0, durationTicks = base.ticksPerBeat.toLong(), pitch = midiPitch, velocity = 100)))
+        val updated = ProjectManager.updateCurrentProject {
+            it.updateTrack(track!!.withMidiClips(track.midiClips + midi))
+        }
+        binding.trackTimelineView.setProject(updated)
+        binding.trackTimelineView.postInvalidate()
+        openMidiEditor(midi)
+        Toast.makeText(this, "Captured ${s.noteName} as MIDI clip", Toast.LENGTH_SHORT).show()
+    }
+
     // ---- Spectrogram selection → clip ----
 
     /** Create a timeline clip from the spectrogram selection of the last recording. */
@@ -1721,6 +1854,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             Triple(binding.headerPresets, binding.contentPresets, binding.chevronPresets),
             Triple(binding.headerDiagnostics, binding.contentDiagnostics, binding.chevronDiagnostics),
             Triple(binding.headerControls, binding.contentControls, binding.chevronControls),
+            Triple(binding.headerSpectral, binding.contentSpectral, binding.chevronSpectral),
             Triple(binding.headerEditor, binding.contentEditor, binding.chevronEditor)
         )
         sections.forEach { (header, content, chevron) ->
