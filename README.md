@@ -41,13 +41,30 @@ Audiology2 is a professional-grade Android application for real-time audio captu
 ### 📼 Recording & Playback
 - **WAV Recording**: 8/16/24/32-bit PCM, real-time to file
 - **Auto Clip Creation**: Stops recording → creates Clip on Track
-- **AudioPlayer**: `AudioTrack` playback with seek, position callbacks, pause/resume
+- **AudioPlayer**: `AudioTrack` playback with seek, position callbacks, pause/resume, loop region
+
+### 🎹 MIDI
+- **Piano roll + drum/step sequencer** (custom Canvas): tap-place, drag move/transpose, edge-resize, velocity, pinch-zoom
+- **MidiSampler** renders clips from the track's sample pool (pitch-shifted melodic / drum one-shots), tempo-synced; included in export
+
+### 📊 Spectral Tools
+- **Spectral Tools card**: live tuner (note+cents), peak, F0 (HPS), centroid, partials; capture → MIDI note
+- **Spectral clip editor**: STFT/ISTFT time×freq gain masks (COLA Hann, 75% overlap), per-channel resynthesis, undo
+- Spectrogram fed live (service-connect registration), SRP gradient with **hunter-orange strongest stop**, drag-selection → clip
+
+### 🤖 Assistant
+- Tool-calling DAW assistant over **OpenAI-compatible `/chat/completions`** (default: OpenRouter free tier)
+- Voice input via on-device `SpeechRecognizer`; API key encrypted in Android Keystore
+- 10 tools wired to real DAW functions (tempo, tracks, clips, pitch/FX, samples, MIDI, loop, export)
 
 ### 💾 Persistence
-- **Room Database**: Project/Track/Clip entities with foreign keys & cascading deletes
-- **TypeConverters**: CSV-based list serialization (no kotlinx.serialization kapt conflicts)
-- **ProjectJsonHelper**: Manual JSON serialization (avoids kapt issues)
-- **UndoRedoManager**: Full history stack with reflection-based property restoration
+- **DataStore (active)**: write-through project store + settings/presets; sync cache + background persist
+- *(Room `ProjectDatabase.kt` + `ProjectJsonHelper.kt` exist but are un-wired — flagged, kept, user decides during sweep.)*
+- **UndoRedoManager**: history stack; actions mutate the current project via `ProjectManager`
+
+---
+
+> **Status (2026-10-28):** builds clean, 57/57 tests. Sweep in progress per `SWEEP_PLAN.md`; continuity + open items in `AGENT_PASSDOWN.md`, `STATE.md`, `TODO.md`. Known placeholder: export mixer renders test tones until the decode fix lands (see passdown).
 
 ---
 

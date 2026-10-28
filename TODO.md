@@ -1,166 +1,41 @@
 # Audiology2 - TODO
 
-## Phase 5: Editor Polish & Export (Next Sprint)
+> **Status (2026-10-28):** Feature-complete core DAW (streaming, DSP, multi-track, MIDI, spectral, assistant). 57/57 tests green, builds clean.
+> **Immediate next phase: SWEEP** — user performs read+run-only sweep (see `SWEEP_PLAN.md`), returns findings, implementation follows in this session.
+> **Passdown for continuity:** see `AGENT_PASSDOWN.md`.
 
-### Editor UX
-- [ ] Add undo/redo toolbar buttons with descriptions
-- [ ] Gain envelope visualization on clips (editable breakpoints)
-- [ ] Clip fade in/out drag handles
-- [ ] Track reordering (drag track headers to reorder)
-- [ ] Master track with master gain/fader/meter
-- [ ] Tempo/time signature grid display in timeline
-- [ ] Clip rename dialog (long press or double tap)
-- [ ] Track color picker dialog
-- [ ] Zoom to selection button (already have zoom fit/selection)
+## Phase NEXT: Sweep integration (arrives as findings)
 
-### Snap Grid Integration
-- [ ] Wire SnapGrid to drag operations in TrackTimelineView
-- [ ] Snap clip start/end on drag
-- [ ] Snap resize handles
-- [ ] Visual grid lines in timeline background
-- [ ] Snap mode selector in toolbar (Off/Seconds/Frames/Beats/Measures)
+- [ ] Incorporate `SWEEP_PLAN.md` findings card-by-card (Connections → Assistant → Editor order)
+- [ ] Reminder to user: **tell assistant about the API field in the Assistant card** (explicitly requested)
 
-### Clip Editing
-- [ ] Split at playhead (already have splitClip())
-- [ ] Trim from clip edges (drag to resize)
-- [ ] Copy/paste clips (with track selection)
-- [ ] Delete with ripple option
-- [ ] Gain envelope per clip (editable breakpoints)
+## Known open implementation items (pre-sweep, confirmed)
 
-### Track Management
-- [ ] Track reordering (drag track headers)
-- [ ] Track M/S/Arm button callbacks
-- [ ] Track pan control
-- [ ] Master track with master gain/fader/meter
-- [ ] Track locking (prevent accidental edits)
+### Functional placeholder (THE one)
+- [ ] **`AudioExporter.kt:306` — export mixer plays test tones instead of decoding `clip.sourcePath`.** Fix = decode real audio window, apply pitch/stretch/gain/fades, mix. Affects WAV + M4A export.
 
-## Phase 6: Export & Sharing
-
-### Export Formats
-- [ ] Multi-track mixdown to WAV (via MediaMuxer or manual mix)
-- [ ] Export selected clips/range
-- [ ] Export with/without DSP chain (bypass option)
-- [ ] MP3 export (MediaCodec encoder)
-- [ ] OGG/FLAC export (FFmpeg-kit integration)
-
-### Import
-- [ ] Import audio files (MediaMetadataRetriever + MediaCodec decode)
-- [ ] Drag/drop or file picker
-- [ ] Auto-create track + clip on import
-- [ ] Support WAV, MP3, OGG, FLAC
-
-### Project Sharing
-- [ ] Project archive (zip with audio files + project.json)
-- [ ] Cloud sync (Google Drive / Firebase)
-- [ ] Project templates
-
-## Phase 7: Advanced Features
-
-### DSP Enhancements
-- [ ] VST/AU plugin hosting (via JNI + Superpowered or native)
-- [ ] Real-time spectrum analyzer overlay
-- [ ] Phase correlation meter
-- [ ] Loudness metering (LUFS)
-- [ ] More filter types (all-pass, shelf, peak notch)
-
-### Performance
-- [ ] Profile and optimize FFT (consider RenderScript or native JNI)
-- [ ] Reduce GC pressure in audio thread
-- [ ] Optimize WaveformView decimation
-- [ ] Cache spectrogram bitmaps more efficiently
-
-### Accessibility
-- [ ] TalkBack support for editor
-- [ ] High contrast mode
-- [ ] Larger touch targets for transport controls
-
-## Bug Fixes
-
-### Known Issues
-- [ ] Occasional audio glitches during heavy DSP load
-- [ ] Spectrogram sometimes shows stale data after pause
-- [ ] Track header M/S/Arm buttons need callback wiring
-- [ ] Undo/redo for clip property changes (gain, pan, etc.)
-- [ ] Playhead not perfectly synced during playback
-- [ ] Spectrogram sometimes shows stale data after pause
-- [ ] Gain envelope not yet visualized on clips
-
-### Audio Engine
-- [ ] Investigate occasional audio glitches under heavy DSP
-- [ ] Optimize buffer sizes for lower latency
-- [ ] Handle sample rate conversion properly
-- [ ] Better handling of audio focus changes
-
-## Technical Debt
-
-### Code Quality
-- [ ] Add unit tests for DSP chain components
-- [ ] Add integration tests for Room database
-- [ ] Add UI tests for editor operations
-- [ ] Document public APIs with KDoc
-- [ ] Migrate from manual JSON to kotlinx.serialization when kapt issues resolved
-- [ ] Replace reflection in UndoRedoManager with type-safe approach
+### Correctness
+- [ ] `WavUtils` parses `audioFormat` (PCM=1 vs IEEE-float=3) but discards it — auto-detect the decode branch (not a config knob)
+- [ ] Recording pipeline produced 26s of digital silence in the field (device recording artifact) — instrument capture start (`AudioRecord.getSampleRate()`, first-block RMS) to bisect input vs runtime during sweep
+- [ ] Surface `StreamSender.drainedBytes` in Diagnostics (TCP window-collapse watchdog)
 
 ### Architecture
-- [ ] Extract audio engine to separate module
-- [ ] Add dependency injection (Hilt/Koin)
-- [ ] Implement proper error boundaries
-- [ ] Add analytics/crash reporting
+- [ ] **MainActivity breakup** (~2,200-line god file): PlaybackController, EditorDialogs, SettingsUi, ProjectActions, MidiPanel, StreamingUi (SpectralCard already extracted)
+- [ ] Decide fate of dead files: `data/ProjectDatabase.kt`, `data/ProjectJsonHelper.kt` (flagged, kept — user decides)
 
-## Documentation
-- [ ] User guide for editor
-- [ ] Developer guide for DSP chain
-- [ ] Architecture decision records (ADRs)
-- [ ] Build/release process documentation
+### Features queued
+- [ ] Assistant provider preset dropdown (OpenRouter current default / Groq / Gemini / Local / Custom)
+- [ ] Assistant Tier 3: audio-aware (send clip WAV to multimodal endpoint)
+- [ ] Spectral brush v2: paint on the spectrogram (time×freq mask) + harmonic extraction → sample
+- [ ] Connections: working PCM wire-format selector (currently hardcoded PCM_16)
+- [ ] Main loop / loop-region state persistence across restart
 
----
+## Carried from legacy TODO (still open)
 
-## Completed ✅
-
-### Phase 1: RTL/Cursor Fix
-- [x] Fixed feedback loop in `applySettingsToViews()`
-- [x] All EditText fields have RTL prevention attributes
-- [x] `window.decorView.layoutDirection = LTR` in onCreate()
-
-### Phase 2: Recording
-- [x] WavWriter for PCM WAV files
-- [x] StreamService startRecording()/stopRecording()
-- [x] Live waveform/spectrogram during recording
-- [x] Auto Clip creation on stop
-
-### Phase 3: Editor Foundation
-- [x] TrackTimelineView with multi-track support
-- [x] WaveformView with zoom/pan/selection
-- [x] SpectrogramView with SRP gradient
-- [x] RotaryKnob for gain
-- [x] SnapGrid for beat/measure snapping
-- [x] GainEnvelope for clip automation
-- [x] Transport controls (play/stop/record/rewind/ff)
-
-### Phase 4: Persistence
-- [x] Room database (Project/Track/Clip entities)
-- [x] CSV-based TypeConverters (no kotlinx.serialization)
-- [x] Manual JSON serialization (ProjectJsonHelper)
-- [x] UndoRedoManager with reflection-based restore
-- [x] AudioPlayer with AudioTrack playback
-
----
-
-## Git Workflow
-
-```bash
-# After making changes
-git add .
-git commit -m "feat: descriptive message"
-
-# Push to remote
-git push -u origin main
-```
-
-## Release Checklist
-- [ ] Update versionCode/versionName in build.gradle.kts
-- [ ] Update CHANGELOG.md
-- [ ] Build release APK: `./gradlew assembleRelease`
-- [ ] Test on physical device
-- [ ] Sign with release keystore
-- [ ] Upload to Play Console / distribute
+- [ ] Master track with master gain/fader/meter
+- [ ] Automation/envelope breakpoints (gain envelope per clip, editable)
+- [ ] Clip fade drag handles on-clip (fields exist: fadeIn/fadeOut)
+- [ ] Copy/paste clips, delete-with-ripple
+- [ ] Track reorder by drag; color picker dialog; clip rename dialog
+- [ ] Third-party VST3/LV2 hosting = longer-term native-FFI task; internal plugin interface + preset JSON first
+- [ ] Reverb, chorus/flanger/phaser, reverse, DC-offset, normalize, stereo tools in the FX chain
