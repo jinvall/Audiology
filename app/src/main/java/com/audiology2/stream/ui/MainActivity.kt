@@ -92,13 +92,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     /** Most recently finished recording file (source for spectrogram selections). */
     private var lastRecordingPath: java.io.File? = null
 
-    // ---- Spectral tools state (updated on the capture thread, read on main) ----
-    private var lastSpectrum: FloatArray? = null
-    private var spectrumSampleRate = 48000
-    private var spectrumFftSize = 2048
-    private var lastSpectralUpdateMs = 0L
-    @Volatile
-    private var spectralSnapshot: SpectralSnapshot? = null
+    // ---- Spectral tools state (owned by SpectralCardController) ----
+    private lateinit var spectralCard: SpectralCardController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Force LTR before super.onCreate so window is configured before view inflation
@@ -110,6 +105,15 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        spectralCard = SpectralCardController(
+            this,
+            binding.spectralPitchLabel,
+            binding.spectralTunerBar,
+            binding.spectralPeakLabel,
+            binding.spectralF0Label,
+            binding.spectralCentroidLabel,
+            binding.spectralPartialsLabel
+        )
         initViews()
         setupExpandableSections()
         loadSettings()
@@ -151,17 +155,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 val frames = fftProcessor.process(samples, framesRead, channels)
                 frames?.let { spectrogramFrames ->
                     binding.mainSpectrogramView.updateSpectrogram(spectrogramFrames, sr, fftProcessor.fftSize)
-
-                    // Spectral analysis (throttled to ~6 Hz, capture thread).
-                    val now = System.currentTimeMillis()
-                    if (now - lastSpectralUpdateMs >= 160) {
-                        lastSpectralUpdateMs = now
-                        lastSpectrum = spectrogramFrames.lastOrNull()
-                        spectrumSampleRate = sr
-                        spectrumFftSize = fftProcessor.fftSize
-                        spectralSnapshot = computeSpectralSnapshot()
-                        binding.mainSpectrogramView.post { updateSpectralUi() }
-                    }
+                    spectralCard.onFrame(spectrogramFrames, sr, fftProcessor.fftSize)
                 }
                 binding.mainSpectrogramView.postInvalidate()
             }
@@ -434,11 +428,12 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnDeleteClip.setOnClickListener { deleteClip() }
         binding.btnPitchSpeed.setOnClickListener { showPitchSpeedDialog() }
         binding.btnEffects.setOnClickListener { showEffectsDialog() }
+        binding.btnSpectralEdit.setOnClickListener { showSpectralEditorDialog() }
         binding.btnMakeSample.setOnClickListener { makeSampleFromSelection() }
         binding.btnAddMidi.setOnClickListener { addMidiClip() }
         binding.trackTimelineView.onMidiClipTap = { midi -> openMidiEditor(midi) }
         binding.btnSpectralCapture.setOnClickListener { capturePitchToMidi() }
-        binding.btnSpectralCopy.setOnClickListener { copyPeakToClipboard() }
+        binding.btnSpectralCopy.setOnClickListener { spectralCard.copyPeak() }
         setupMidiEditor()
         
         binding.btnZoomFit.setOnClickListener { binding.trackTimelineView.zoomToFit() }
@@ -1257,6 +1252,147 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             }
     }
 
+        // ===== Spectral clip editor (STFT brush) =====
+
+    /** Rectangular time-freq spectral edit on the selected clip. */
+    private fun showSpectralEditorDialog() {
+        val clip = requireSelectedClip("edit spectrally") ?: return
+        val context = this
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 16, 24, 8)
+        }
+
+        fun row(label: String, hintText: String, def: String): EditText {
+            root.addView(TextView(context).apply {
+                text = label; setPadding(0, 8, 0, 0)
+                textSize = 13f; setTextColor(0xFFAAAAAA.toInt())
+            })
+            return EditText(context).apply {
+                setText(def)
+                hint = hintText
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL or
+                    android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
+            }.also { root.addView(it) }
+        }
+
+        // Frequency range (Hz) of the brush rectangle.
+        val freqMinE = row("Frequency min (Hz)", "e.g. 2000", "0")
+        val freqMaxE = row("Frequency max (Hz)", "e.g. 4000", "8000")
+        // Time range as % of clip.
+        val timeStartE = row("Time start (% of clip)", "0-100", "0")
+        val timeEndE = row("Time end (% of clip)", "0-100", "100")
+        // Gain inside rectangle.
+        val gainDbE = row("Gain in region (dB, negative = attenuate)", "e.g. -60 mutes, +6 boosts", "-60")
+
+        val dialog = AlertDialog.Builder(context, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Spectral Edit — ${clip.name}")
+            .setMessage("STFT mask: gain applied to the selected time×frequency rectangle")
+            .setView(root)
+            .setPositiveButton("Apply", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (busy.get()) return@setOnClickListener
+                val freqMin = freqMinE.text.toString().toDoubleOrNull() ?: 0.0
+                val freqMax = freqMaxE.text.toString().toDoubleOrNull() ?: 8000.0
+                val tStart = (timeStartE.text.toString().toDoubleOrNull() ?: 0.0) / 100.0
+                val tEnd = (timeEndE.text.toString().toDoubleOrNull() ?: 100.0) / 100.0
+                val gain = Math.pow(10.0, (gainDbE.text.toString().toDoubleOrNull() ?: -60.0) / 20.0)
+                if (freqMax <= freqMin || freqMin < 0) {
+                    Toast.makeText(context, "Invalid frequency range", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                busy.set(true)
+                val progressToast = Toast.makeText(context, "Processing spectrum...", Toast.LENGTH_SHORT)
+                progressToast.show()
+
+                editorScope.launch {
+                    val result = runSpectralEdit(clip, freqMin, freqMax, tStart, tEnd, gain)
+                    runOnUiThread {
+                        busy.set(false)
+                        progressToast.cancel()
+                        if (result != null) {
+                            val updated = ProjectManager.updateCurrentProject { project ->
+                                val track = project.getTrack(clip.trackId) ?: return@updateCurrentProject project
+                                project.updateTrack(track.updateClip(clip.copy(sourcePath = result.outputFile.absolutePath)))
+                            }
+                            binding.trackTimelineView.setProject(updated)
+                            binding.trackTimelineView.postInvalidate()
+                            dialog.dismiss()
+                            Toast.makeText(context, "Spectral edit applied", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Spectral edit failed", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /** STFT -> rectangular mask -> ISTFT per channel; writes a new WAV. */
+    private suspend fun runSpectralEdit(
+        clip: Clip,
+        freqMinHz: Double,
+        freqMaxHz: Double,
+        timeStart: Double,
+        timeEnd: Double,
+        gain: Double
+    ): EditResult? {
+        val src = clipEditor.readClipAudio(clip) ?: return null
+        if (src.frames == 0) return null
+        val fft = com.audiology2.stream.dsp.SpectralTransform.DEFAULT_FFT
+        val hop = com.audiology2.stream.dsp.SpectralTransform.DEFAULT_HOP
+        val sr = src.sampleRate
+        val ch = src.channels
+
+        val outSamples = FloatArray(src.samples.size)
+        for (c in 0 until ch) {
+            // Extract channel into a contiguous buffer.
+            val mono = FloatArray(src.frames)
+            var m = 0
+            var i = c
+            while (i < src.samples.size) {
+                mono[m++] = src.samples[i]
+                i += ch
+            }
+            if (mono.size < fft) continue
+
+            val frames = com.audiology2.stream.dsp.SpectralTransform.stft(mono, fft, hop)
+            val frameStart = (timeStart.coerceIn(0.0, 1.0) * frames.size).toInt().coerceIn(0, frames.size)
+            val frameEnd = (timeEnd.coerceIn(0.0, 1.0) * frames.size).toInt().coerceIn(frameStart, frames.size)
+            if (frameEnd <= frameStart) continue
+
+            val mask = com.audiology2.stream.dsp.SpectralTransform.rectangularMask(
+                frames.size, fft, sr, frameStart, frameEnd, freqMinHz, freqMaxHz, gain
+            )
+            val masked = com.audiology2.stream.dsp.SpectralTransform.applyMask(frames, fft, sr, mask)
+            val recovered = com.audiology2.stream.dsp.SpectralTransform.istft(masked, fft, hop)
+
+            // Write recovered channel back, trimmed to the same length.
+            val n = minOf(mono.size, recovered.size)
+            var o = 0
+            var j = c
+            while (j < src.samples.size && o < n) {
+                outSamples[j] = recovered[o++]
+                j += ch
+            }
+        }
+
+        val out = java.io.File(this@MainActivity.filesDir, "edited").apply { mkdirs() }
+        val name = clip.name.lowercase().replace(Regex("[^a-z0-9]+"), "_")
+        val file = java.io.File(out, "${name}_spectral_${java.util.UUID.randomUUID().toString().take(8)}.wav")
+        val buf = com.audiology2.stream.audio.AudioBuffer(outSamples, sr, ch, src.frames)
+        if (!com.audiology2.stream.audio.WavUtils.write(file, buf)) return null
+        return EditResult(file, src.frames.toDouble() / sr)
+    }
+
     // ===== Record → beat sample =====
 
     private fun makeSampleFromSelection() {
@@ -1498,70 +1634,11 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         else String.format("%d.%03d", secs, ms)
     }
 
-    // ---- Spectral tools ----
-
-    /** Immutable analysis result for one spectrum frame. */
-    data class SpectralSnapshot(
-        val noteName: String,
-        val cents: Int,
-        val midi: Int?,
-        val peakFreq: Double,
-        val peakDb: Double,
-        val f0: Double?,
-        val centroid: Double,
-        val partialsText: String
-    )
-
-    /** Run analysis on the latest stored magnitude frame (capture thread, cheap). */
-    private fun computeSpectralSnapshot(): SpectralSnapshot? {
-        val frame = lastSpectrum ?: return null
-        val sr = spectrumSampleRate
-        val fft = spectrumFftSize
-        val peak = com.audiology2.stream.dsp.SpectralEngine.peak(frame, sr, fft)
-        val f0 = com.audiology2.stream.dsp.SpectralEngine.fundamental(frame, sr, fft)
-        val centroid = com.audiology2.stream.dsp.SpectralEngine.centroid(frame, sr, fft)
-        val fForNote = f0 ?: peak?.freq
-        val note = fForNote?.let { com.audiology2.stream.dsp.SpectralEngine.noteFromFreq(it) }
-        val partials = com.audiology2.stream.dsp.SpectralEngine.partials(frame, sr, fft, topN = 6)
-        val partialsText = partials.joinToString(" ") { "${it.freq.roundToInt()}Hz(${"%.0f".format(it.db)}dB)" }
-        return SpectralSnapshot(
-            noteName = note?.name ?: "--",
-            cents = note?.cents ?: 0,
-            midi = note?.midi,
-            peakFreq = peak?.freq ?: 0.0,
-            peakDb = peak?.db ?: -140.0,
-            f0 = f0,
-            centroid = centroid,
-            partialsText = partialsText
-        )
-    }
-
-    /** Push the latest snapshot into the card (main thread). */
-    private fun updateSpectralUi() {
-        val s = spectralSnapshot ?: return
-        binding.spectralPitchLabel.text = "Pitch: ${s.noteName}  (${if (s.cents >= 0) "+" else ""}${s.cents} cent)"
-        // Tuner: progress 50 = in tune, +/-25 ~ +/-25 cents.
-        binding.spectralTunerBar.progress = (50 + s.cents.coerceIn(-50, 50)).coerceIn(0, 100)
-        binding.spectralPeakLabel.text = "Peak: ${String.format("%.1f", s.peakFreq)} Hz at ${String.format("%.0f", s.peakDb)} dB"
-        binding.spectralF0Label.text = "F0: ${s.f0?.let { String.format("%.1f", it) + " Hz" } ?: "--"}"
-        binding.spectralCentroidLabel.text = "Centroid: ${String.format("%.0f", s.centroid)} Hz"
-        binding.spectralPartialsLabel.text = "Partials: ${s.partialsText.ifEmpty { "--" }}"
-    }
-
-    private fun copyPeakToClipboard() {
-        val s = spectralSnapshot ?: run {
-            Toast.makeText(this, "No live spectrum yet - start streaming", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val text = String.format("%.1f Hz (note %s)", s.peakFreq, s.noteName)
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        cm.setPrimaryClip(android.content.ClipData.newPlainText("peak", text))
-        Toast.makeText(this, "Copied $text", Toast.LENGTH_SHORT).show()
-    }
+    // ---- Spectral tools (logic lives in SpectralCardController) ----
 
     /** Add the detected pitch as a note in the open MIDI clip (or create/route one). */
     private fun capturePitchToMidi() {
-        val s = spectralSnapshot ?: run {
+        val s = spectralCard.snapshot ?: run {
             Toast.makeText(this, "No live spectrum yet - start streaming", Toast.LENGTH_SHORT).show()
             return
         }

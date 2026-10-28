@@ -1707,6 +1707,16 @@
                     android:text="FX" />
 
                 <Button
+                    android:id="@+id/btnSpectralEdit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
+                    android:text="Spectral" />
+
+                <Button
                     android:id="@+id/btnMakeSample"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
