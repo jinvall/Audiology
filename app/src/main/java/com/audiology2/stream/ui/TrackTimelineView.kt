@@ -80,6 +80,18 @@ class TrackTimelineView @JvmOverloads constructor(
         strokeWidth = 2.5f
         color = 0xFFFFB300.toInt()
     }
+    private val paintMidi = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF7A2FFF.toInt()
+    }
+    private val paintMidiBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f
+        color = 0xFFB39DFF.toInt()
+    }
+    private val paintClipText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        textSize = 11f * resources.displayMetrics.scaledDensity
+    }
     private val paintPlayhead = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2f
@@ -322,6 +334,7 @@ class TrackTimelineView @JvmOverloads constructor(
 
         for ((trackIndex, track) in project!!.tracks.withIndex()) {
             drawTrack(canvas, width, height, track, trackIndex)
+            drawMidiClips(canvas, width, track, trackIndex)
         }
 
         // Draw playhead on top
@@ -504,6 +517,24 @@ class TrackTimelineView @JvmOverloads constructor(
         }
     }
 
+    /** Draw MIDI clips as purple blocks with note-count labels. */
+    private fun drawMidiClips(canvas: Canvas, width: Float, track: Track, trackIndex: Int) {
+        if (track.midiClips.isEmpty()) return
+        val trackTop = trackIndex * trackHeight
+        val trackBottom = trackTop + trackHeight
+        val bpm = 120.0
+        for (mc in track.midiClips) {
+            val left = timeToPx(mc.startTime)
+            val right = timeToPx(mc.endTimeSec(bpm))
+            if (right < trackHeaderWidth || left > width) continue
+            val rect = RectF(left, trackTop + 4f, right, trackBottom - 4f)
+            canvas.drawRect(rect, paintMidi)
+            canvas.drawRect(rect, paintMidiBorder)
+            val label = "${mc.name} (${mc.notes.size})"
+            canvas.drawText(label, left + 4f, trackTop + trackHeight / 2 + 4f, paintClipText)
+        }
+    }
+
     private fun drawClip(canvas: Canvas, width: Float, trackTop: Float, trackBottom: Float, 
                          trackCenterY: Float, clip: Clip, track: Track) {
         val left = timeToPx(clip.startTime)
@@ -642,6 +673,24 @@ class TrackTimelineView @JvmOverloads constructor(
                 
                 if (trackIndex >= 0 && trackIndex < proj.tracks.size) {
                     val track = proj.tracks[trackIndex]
+
+                    // MIDI clips take priority (drawn on top).
+                    if (track.midiClips.isNotEmpty() && event.x >= trackHeaderWidth) {
+                        val bpm = 120.0
+                        val midiHit = track.midiClips.firstOrNull { mc ->
+                            time >= mc.startTime && time <= mc.endTimeSec(bpm)
+                        }
+                        if (midiHit != null) {
+                            selectedClipId = null
+                            selectedTrackId = track.id
+                            selectionRangeStart = -1.0
+                            selectionRangeEnd = -1.0
+                            postInvalidate()
+                            onMidiClipTap?.invoke(midiHit)
+                            return true
+                        }
+                    }
+
                     val clip = track.getClipAt(time)
                     
                     if (clip != null) {
@@ -829,6 +878,7 @@ class TrackTimelineView @JvmOverloads constructor(
     var onClipChanged: ((Clip) -> Unit)? = null
     var onRangeChanging: ((Double, Double) -> Unit)? = null
     var onRangeSelected: ((Double, Double) -> Unit)? = null
+    var onMidiClipTap: ((MidiClip) -> Unit)? = null
 
     inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean = true

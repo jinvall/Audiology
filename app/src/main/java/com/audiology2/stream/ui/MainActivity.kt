@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private val audioExporter = AudioExporter(editorScope)
     private val clipEditor = ClipEditor(this)
     private val sampleMaker = SampleMaker(this)
+    private val midiSampler = MidiSampler(this)
     
     // Recording callback reference for unregistering
     private var recordingCallback: ((FloatArray, Int, Int) -> Unit)? = null
@@ -422,6 +423,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnPitchSpeed.setOnClickListener { showPitchSpeedDialog() }
         binding.btnEffects.setOnClickListener { showEffectsDialog() }
         binding.btnMakeSample.setOnClickListener { makeSampleFromSelection() }
+        binding.btnAddMidi.setOnClickListener { addMidiClip() }
+        binding.trackTimelineView.onMidiClipTap = { midi -> openMidiEditor(midi) }
+        setupMidiEditor()
         
         binding.btnZoomFit.setOnClickListener { binding.trackTimelineView.zoomToFit() }
         binding.btnZoomSelection.setOnClickListener { binding.trackTimelineView.zoomToSelection() }
@@ -529,6 +533,216 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.trackTimelineView.setProject(updated)
         binding.trackTimelineView.postInvalidate()
         Log.d("Editor", "Deleted clip: $clipId")
+    }
+
+    // ===== MIDI editor =====
+
+    private var currentMidiClipId: String? = null
+    private var auditionTrack: android.media.AudioTrack? = null
+
+    /** Current MIDI clip being edited (from the live project). */
+    private fun currentMidiClip(): MidiClip? {
+        val id = currentMidiClipId ?: return null
+        val project = ProjectManager.getCurrentProject() ?: return null
+        return project.tracks.firstNotNullOfOrNull { t ->
+            t.midiClips.firstOrNull { it.id == id }
+        }
+    }
+
+    private fun setupMidiEditor() {
+        binding.pianoRollView.onClipChanged = { updatedMidi ->
+            val project = ProjectManager.getCurrentProject()
+            val track = project?.getTrack(updatedMidi.trackId)
+            if (project != null && track != null) {
+                val updated = ProjectManager.updateCurrentProject { it.updateTrack(track.updateMidiClip(updatedMidi)) }
+                binding.trackTimelineView.setProject(updated)
+                updateMidiNoteInfo()
+            }
+        }
+        binding.pianoRollView.onVelocityRequest = { note ->
+            updateMidiNoteInfo()
+            showMidiVelocityDialog(note)
+        }
+        binding.pianoRollView.onPitchAudition = { pitch -> auditionTone(pitch) }
+
+        binding.btnMidiMode.setOnClickListener { toggleMidiMode() }
+        binding.btnMidiPlay.setOnClickListener { playCurrentMidi() }
+        binding.btnMidiDelete.setOnClickListener {
+            binding.pianoRollView.deleteSelectedNote()
+        }
+        binding.btnMidiClose.setOnClickListener {
+            binding.midiEditorPanel.visibility = View.GONE
+            currentMidiClipId = null
+        }
+    }
+
+    private fun addMidiClip() {
+        val project = ProjectManager.getCurrentProject() ?: return
+        var track = binding.trackTimelineView.currentSelectedTrackId
+            ?.let { project.getTrack(it) }
+            ?: project.tracks.firstOrNull()
+        var work = project
+        if (track == null) {
+            work = project.addTrack(name = "Track 1", color = 0xFF00D4AA.toInt())
+            track = work.tracks.first()
+        }
+        val start = if (binding.trackTimelineView.currentPlayheadTime > 0) {
+            binding.trackTimelineView.currentPlayheadTime
+        } else track.duration
+        val midi = MidiClip(
+            name = "MIDI ${track.midiClips.size + 1}",
+            startTime = start,
+            trackId = track.id
+        )
+        val updated = ProjectManager.updateCurrentProject {
+            it.updateTrack(track!!.withMidiClips(track.midiClips + midi))
+        }
+        binding.trackTimelineView.setProject(updated)
+        binding.trackTimelineView.postInvalidate()
+        openMidiEditor(midi)
+    }
+
+    private fun openMidiEditor(midi: MidiClip) {
+        currentMidiClipId = midi.id
+        binding.midiEditorPanel.visibility = View.VISIBLE
+        val project = ProjectManager.getCurrentProject()
+        val bpm = project?.tempo ?: 120.0
+        binding.midiClipLabel.text = midi.name
+        binding.pianoRollView.setDrumMode(midi.drumMode)
+        binding.pianoRollView.setClip(midi, bpm)
+        updateMidiModeButton()
+        updateMidiNoteInfo()
+        binding.pianoRollView.post { binding.pianoRollView.zoomToFitBeats(4) }
+    }
+
+    private fun updateMidiModeButton() {
+        val drum = binding.pianoRollView.isDrumModeActive
+        binding.btnMidiMode.text = if (drum) "Drums \u2713" else "Piano \u2713"
+    }
+
+    private fun toggleMidiMode() {
+        val midi = currentMidiClip() ?: return
+        val drum = !binding.pianoRollView.isDrumModeActive
+        val updated = midi.copy(drumMode = drum)
+        binding.pianoRollView.setDrumMode(drum)
+        binding.pianoRollView.setClip(updated, ProjectManager.getCurrentProject()?.tempo ?: 120.0)
+        // Persist via the same update path.
+        binding.pianoRollView.onClipChanged?.invoke(updated)
+        updateMidiModeButton()
+    }
+
+    private fun updateMidiNoteInfo() {
+        val note = binding.pianoRollView.selectedNote
+        if (note == null) {
+            binding.midiNoteInfo.text = ""
+            return
+        }
+        binding.midiNoteInfo.text = "note ${note.pitch} vel ${note.velocity}"
+    }
+
+    private fun showMidiVelocityDialog(note: MidiNote) {
+        val holder = arrayOf(note.copy())
+        val bar = SeekBar(this).apply {
+            max = 127
+            progress = note.velocity.coerceIn(1, 127)
+        }
+        val label = TextView(this).apply {
+            text = "Velocity: ${note.velocity}"
+            setPadding(24, 16, 24, 0)
+        }
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                label.text = "Velocity: ${p.coerceAtLeast(1)}"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(label)
+            addView(bar)
+        }
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Note velocity")
+            .setView(root)
+            .setPositiveButton("OK", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+            .also { d ->
+                d.setOnShowListener {
+                    d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        binding.pianoRollView.updateNote(holder[0].copy(velocity = bar.progress.coerceAtLeast(1)))
+                        d.dismiss()
+                    }
+                }
+                d.show()
+            }
+    }
+
+    private fun playCurrentMidi() {
+        val project = ProjectManager.getCurrentProject() ?: return
+        val midi = currentMidiClip() ?: return
+        if (midi.notes.isEmpty()) {
+            Toast.makeText(this, "Add notes first (tap the grid)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val track = project.getTrack(midi.trackId)
+        val pool = track?.clips ?: emptyList()
+        if (pool.isEmpty()) {
+            Toast.makeText(this, "Add audio samples on this track first (import or Make Sample)", Toast.LENGTH_LONG).show()
+            return
+        }
+        editorScope.launch {
+            val file = midiSampler.renderClip(midi, pool, project.tempo, project.sampleRate)
+            runOnUiThread {
+                if (file != null) {
+                    stopPlayback()
+                    if (audioPlayer.loadFile(file)) {
+                        audioPlayer.seek(0.0)
+                        audioPlayer.play()
+                        binding.btnPlay.setImageResource(android.R.drawable.ic_media_pause)
+                        Toast.makeText(this@MainActivity, "Rendered ${midi.notes.size} notes", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(this@MainActivity, "MIDI render failed", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** Audition a pitch with a short sine tone. */
+    private fun auditionTone(pitch: Int) {
+        try {
+            val sr = 48000
+            val durMs = 160
+            val freq = 440.0 * Math.pow(2.0, ((pitch - 69).toDouble()) / 12.0)
+            val n = sr * durMs / 1000
+            val samples = ShortArray(n)
+            for (i in 0 until n) {
+                val env = minOf(1.0, i / 400.0, (n - i) / 800.0).coerceAtLeast(0.0)
+                samples[i] = (Math.sin(2.0 * Math.PI * freq * i / sr) * 0.35 * env * Short.MAX_VALUE).toInt().toShort()
+            }
+            val at = android.media.AudioTrack(
+                android.media.AudioManager.STREAM_MUSIC,
+                sr,
+                android.media.AudioFormat.CHANNEL_OUT_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT,
+                samples.size * 2,
+                android.media.AudioTrack.MODE_STATIC
+            )
+            auditionTrack?.let { runCatching { it.stop(); it.release() } }
+            auditionTrack = at
+            if (auditionTrack != null && auditionTrack!!.state == android.media.AudioTrack.STATE_INITIALIZED) {
+                auditionTrack!!.write(samples, 0, samples.size)
+                auditionTrack!!.play()
+                binding.pianoRollView.postDelayed({
+                    runCatching { auditionTrack?.stop(); auditionTrack?.release() }
+                    auditionTrack = null
+                }, (durMs + 120).toLong())
+            }
+        } catch (e: Exception) {
+            Log.w("Editor", "Audition failed", e)
+        }
     }
 
     // ===== Pitch / Speed editing =====
@@ -1369,12 +1583,14 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 progressDialog.show()
                 
                 editorScope.launch {
+                    // Render any MIDI clips to audio so exports include them.
+                    val renderProject = midiSampler.renderProject(project)
                     val exporter = AudioExporter(editorScope)
                     val success = when (format) {
-                        ExportFormat.WAV -> exporter.exportWav(project, outputFile) { progress ->
+                        ExportFormat.WAV -> exporter.exportWav(renderProject, outputFile) { progress ->
                             runOnUiThread { progressDialog.setMessage("Exporting: ${(progress * 100).toInt()}%") }
                         }
-                        ExportFormat.M4A -> exporter.exportM4a(project, outputFile) { progress ->
+                        ExportFormat.M4A -> exporter.exportM4a(renderProject, outputFile) { progress ->
                             runOnUiThread { progressDialog.setMessage("Exporting: ${(progress * 100).toInt()}%") }
                         }
                         else -> false

@@ -1426,6 +1426,87 @@
                 android:layout_marginTop="8dp"
                 android:background="@color/srp_bg" />
 
+            <!-- MIDI editor panel (hidden until a MIDI clip is opened) -->
+            <LinearLayout
+                android:id="@+id/midiEditorPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp"
+                android:padding="6dp"
+                android:background="@color/srp_bg"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/midiClipLabel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="MIDI Clip"
+                        android:textColor="@color/srp_text"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/midiNoteInfo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="@color/srp_text"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+
+                    <Button
+                        android:id="@+id/btnMidiMode"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:text="Piano ✓" />
+
+                    <Button
+                        android:id="@+id/btnMidiPlay"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:text="Play" />
+
+                    <Button
+                        android:id="@+id/btnMidiDelete"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:text="Del Note" />
+
+                    <Button
+                        android:id="@+id/btnMidiClose"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Done" />
+                </LinearLayout>
+
+                <com.audiology2.stream.ui.PianoRollView
+                    android:id="@+id/pianoRollView"
+                    android:layout_width="match_parent"
+                    android:layout_height="240dp"
+                    android:layout_marginTop="4dp"
+                    android:background="#14141C" />
+            </LinearLayout>
+
             <!-- Track controls -->
             <HorizontalScrollView
                 android:layout_width="match_parent"
@@ -1513,10 +1594,20 @@
                     android:id="@+id/btnMakeSample"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
                     android:paddingStart="12dp"
                     android:paddingEnd="12dp"
                     android:minWidth="0dp"
                     android:text="Make Sample" />
+
+                <Button
+                    android:id="@+id/btnAddMidi"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
+                    android:text="MIDI" />
             </LinearLayout>
             </HorizontalScrollView>
 

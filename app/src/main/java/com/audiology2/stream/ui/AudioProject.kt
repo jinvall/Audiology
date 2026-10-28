@@ -112,6 +112,73 @@ data class Clip(
 }
 
 /**
+ * A single MIDI note event inside a [MidiClip]. Ticks are relative to the
+ * clip start; resolution is [MidiClip.ticksPerBeat] (default 480, standard
+ * MIDI PPQ).
+ */
+@Serializable
+data class MidiNote(
+    val id: String = UUID.randomUUID().toString(),
+    var startTick: Long = 0,
+    var durationTicks: Long = 480,
+    /** MIDI note number (0-127); 60 = middle C (C4). */
+    var pitch: Int = 60,
+    /** Velocity 1..127. */
+    var velocity: Int = 100
+) {
+    val endTick: Long get() = startTick + durationTicks
+}
+
+/**
+ * A MIDI clip on a track: piano-roll / step-sequencer data rendered by the
+ * sampler at play/export time. [startTime] is the timeline position;
+ * note ticks are relative to the clip start.
+ */
+@Serializable
+data class MidiClip(
+    val id: String = UUID.randomUUID().toString(),
+    var name: String = "MIDI Clip",
+    var startTime: Double = 0.0,
+    var trackId: String = "",
+    /** MIDI resolution: ticks per quarter note. */
+    var ticksPerBeat: Int = 480,
+    var notes: List<MidiNote> = emptyList(),
+    val color: Int = 0xFF7A2FFF.toInt(),
+    var muted: Boolean = false,
+    /** Drum/step mode: rows are fixed pitches mapped to one-shot samples. */
+    var drumMode: Boolean = false,
+    /** First pitch used in drum mode row mapping (default C4 area). */
+    var drumRootPitch: Int = 60
+) {
+
+    /** Clip-relative end tick (max note end). */
+    val endTick: Long get() = notes.maxOfOrNull { it.endTick } ?: 0
+
+    /** Duration in seconds at the given tempo (BPM). */
+    fun durationSec(bpm: Double): Double {
+        val beatSec = 60.0 / bpm.coerceIn(40.0, 300.0)
+        return endTick.toDouble() / ticksPerBeat * beatSec
+    }
+
+    /** Seconds from clip-relative tick at the given tempo. */
+    fun timeAt(tick: Long, bpm: Double): Double {
+        val beatSec = 60.0 / bpm.coerceIn(40.0, 300.0)
+        return tick.toDouble() / ticksPerBeat * beatSec
+    }
+
+    /** Clip-relative tick from seconds at the given tempo. */
+    fun tickAt(seconds: Double, bpm: Double): Long {
+        val beatSec = 60.0 / bpm.coerceIn(40.0, 300.0)
+        return (seconds / beatSec * ticksPerBeat).toLong()
+    }
+
+    /** Absolute timeline end time at the given tempo. */
+    fun endTimeSec(bpm: Double): Double = startTime + durationSec(bpm)
+
+    fun withNotes(newNotes: List<MidiNote>): MidiClip = copy(notes = newNotes)
+}
+
+/**
  * Audio track containing clips.
  */
 @Serializable
@@ -120,6 +187,8 @@ data class Track(
     var name: String = "Track",
     /** Clips on this track, sorted by startTime */
     val clips: List<Clip> = emptyList(),
+    /** MIDI clips on this track */
+    val midiClips: List<MidiClip> = emptyList(),
     /** Track gain (1.0 = unity) */
     var gain: Float = 1.0f,
     /** Track pan (-1..1) */
@@ -140,10 +209,22 @@ data class Track(
     var monitor: Boolean = false
 ) {
 
-    /** Total duration of track based on clips */
-    val duration: Double get() = clips.maxOfOrNull { it.endTime } ?: 0.0
+    /** Total duration of track based on clips (audio + MIDI at 120 BPM fallback). */
+    val duration: Double get() {
+        val audioEnd = clips.maxOfOrNull { it.endTime } ?: 0.0
+        val midiEnd = midiClips.maxOfOrNull { it.endTimeSec(120.0) } ?: 0.0
+        return maxOf(audioEnd, midiEnd)
+    }
 
     fun withClips(newClips: List<Clip>): Track = copy(clips = newClips.sortedBy { it.startTime })
+
+    fun withMidiClips(newMidi: List<MidiClip>): Track = copy(midiClips = newMidi.sortedBy { it.startTime })
+
+    /** Replace a MIDI clip (by id). */
+    fun updateMidiClip(updated: MidiClip): Track =
+        withMidiClips(midiClips.map { if (it.id == updated.id) updated else it })
+
+    fun removeMidiClip(clipId: String): Track = withMidiClips(midiClips.filterNot { it.id == clipId })
 
     /** Add clip at end of track */
     fun appendClip(clip: Clip): Track = withClips(clips + clip.with(trackId = id, startTime = duration))

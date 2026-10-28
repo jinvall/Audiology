@@ -32,7 +32,7 @@ enum class ChannelMode { MONO, STEREO }
 @Serializable
 data class NetworkConfig(
     val host: String = "",
-    val port: Int = 59090,
+    val port: Int = 8090,
     val transport: TransportType = TransportType.TCP,
     val sampleRate: Int = 48000,
     val channelMode: ChannelMode = ChannelMode.MONO,
