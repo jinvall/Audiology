@@ -89,6 +89,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     // Recording callback reference for unregistering
     private var recordingCallback: ((FloatArray, Int, Int) -> Unit)? = null
 
+    /** Most recently finished recording file (source for spectrogram selections). */
+    private var lastRecordingPath: java.io.File? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Force LTR before super.onCreate so window is configured before view inflation
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
@@ -130,10 +133,17 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             bound = true
             service?.registerCallback(this@MainActivity)
             
-            // Register for live waveform/spectrogram updates
+            // Register the single live feed callback: waveform + FFT spectrogram.
+            // This must happen here (on connect) - the earlier registration
+            // path ran before the service bound and silently skipped setup.
             recordingCallback = { samples, framesRead, channels ->
                 val sr = binding.sampleRateEdit.text.toString().toIntOrNull() ?: 48000
                 binding.mainWaveformView.setWaveform(samples, sr)
+
+                val frames = fftProcessor.process(samples, framesRead, channels)
+                frames?.let { spectrogramFrames ->
+                    binding.mainSpectrogramView.updateSpectrogram(spectrogramFrames, sr, fftProcessor.fftSize)
+                }
                 binding.mainSpectrogramView.postInvalidate()
             }
             service?.registerRecordingCallback(recordingCallback!!)
@@ -297,39 +307,22 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             binding.mainWaveformView.visibility = if (checked) View.VISIBLE else View.GONE
         }
         binding.switchSpectrogram.setOnCheckedChangeListener { _, checked ->
-            binding.mainSpectrogramView.visibility = if (checked) View.VISIBLE else View.GONE
+            binding.mainSpectrogramView.onSelectionEnd = { (start, end) ->
+            createClipFromSpectrogramSelection(start, end)
+        }
+
+        binding.mainSpectrogramView.visibility = if (checked) View.VISIBLE else View.GONE
         }
 
         // Initialize track timeline
         initTrackTimeline()
         
-        // Setup FFT processor for real spectrogram
-        setupFFTProcessor()
+        // Real-time spectrogram feed is registered in onServiceConnected
+        // (it must run after the service binds, since the callback lives on
+        // the service's capture thread).
         
         // Setup snap grid
         setupSnapGrid()
-    }
-
-    private fun setupFFTProcessor() {
-        // Connect FFT processor to timeline for real-time spectrogram
-        if (service != null) {
-            service?.registerRecordingCallback { samples, framesRead, channels ->
-                val sr = binding.sampleRateEdit.text.toString().toIntOrNull() ?: 48000
-                binding.mainWaveformView.setWaveform(samples, sr)
-                
-                // Process FFT for spectrogram
-                val frames = fftProcessor.process(samples, framesRead, channels)
-                frames?.let { spectrogramFrames ->
-                    editorScope.launch(Dispatchers.Main) {
-                        // Update spectrogram view with new frames
-                        binding.mainSpectrogramView.updateSpectrogram(spectrogramFrames, sr, fftProcessor.fftSize)
-                    }
-                }
-                
-                binding.mainWaveformView.setWaveform(samples, sr)
-                binding.mainSpectrogramView.postInvalidate()
-            }
-        }
     }
 
     private fun setupAudioPlayerCallbacks() {
@@ -1454,6 +1447,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnRecord.clearColorFilter()
         
         if (filePath != null) {
+            lastRecordingPath = java.io.File(filePath)
             // Create a clip from the recorded file and add to project
             val duration = service!!.getRecordingDurationMs() / 1000.0
             val updated = ProjectManager.updateCurrentProject { p ->
@@ -1481,6 +1475,56 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         val ms = ((seconds * 1000) % 1000).toInt()
         return if (mins > 0) String.format("%d:%02d.%03d", mins, secs, ms)
         else String.format("%d.%03d", secs, ms)
+    }
+
+    // ---- Spectrogram selection → clip ----
+
+    /** Create a timeline clip from the spectrogram selection of the last recording. */
+    private fun createClipFromSpectrogramSelection(startSec: Double, endSec: Double) {
+        val file = lastRecordingPath
+        if (file == null || !file.exists()) {
+            Toast.makeText(this, "Record some audio first, then drag a span on the spectrogram", Toast.LENGTH_LONG).show()
+            binding.mainSpectrogramView.clearSelection()
+            return
+        }
+        val buf = com.audiology2.stream.audio.WavUtils.read(file)
+        if (buf == null || buf.frames <= 0) {
+            Toast.makeText(this, "Recorded file unreadable", Toast.LENGTH_SHORT).show()
+            binding.mainSpectrogramView.clearSelection()
+            return
+        }
+        val fileDur = buf.frames.toDouble() / buf.sampleRate
+
+        // Selection is relative to the stream; clamp into the recording file.
+        val srcStart = startSec.coerceAtLeast(0.0)
+        if (srcStart >= fileDur) {
+            Toast.makeText(this, "Selection is outside the recorded audio", Toast.LENGTH_SHORT).show()
+            binding.mainSpectrogramView.clearSelection()
+            return
+        }
+        val srcEnd = endSec.coerceIn(srcStart + 0.03, fileDur)
+        if (srcEnd <= srcStart + 0.03) {
+            binding.mainSpectrogramView.clearSelection()
+            return
+        }
+
+        val updated = ProjectManager.updateCurrentProject { p ->
+            val track = p.tracks.firstOrNull()
+                ?: p.addTrack(name = "Track 1", color = 0xFF00D4AA.toInt()).tracks.first()
+            val clip = Clip(
+                sourcePath = file.absolutePath,
+                sourceOffset = srcStart,
+                duration = srcEnd - srcStart,
+                startTime = track.duration,
+                trackId = track.id,
+                color = 0xFFFF4F00.toInt() // hunter orange: SRP selection accent
+            )
+            p.updateTrack(track.appendClip(clip))
+        }
+        binding.trackTimelineView.setProject(updated)
+        binding.trackTimelineView.postInvalidate()
+        binding.mainSpectrogramView.clearSelection()
+        Toast.makeText(this, "Clip created from spectrogram selection (${String.format("%.2f", srcEnd - srcStart)}s)", Toast.LENGTH_SHORT).show()
     }
 
     // ---- Export/Import ----

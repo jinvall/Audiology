@@ -50,13 +50,15 @@ class SpectrogramView @JvmOverloads constructor(
     }
 
     // SRP Spectral Gradient (intensity 0.0 → 1.0)
+    /** SRP-fused spectral gradient. Index 0 = weakest, last = strongest.
+     *  Strongest stop is hunter orange (#FF4F00), the SRP signal color. */
     private val spectralStops = intArrayOf(
-        0xFF060119.toInt(),  // #060119 - dark navy
+        0xFF060119.toInt(),  // #060119 - dark navy (weakest)
         0xFF2F076E.toInt(),  // #2F076E - violet
         0xFF370150.toInt(),  // #370150 - deep purple
         0xFF5633C7.toInt(),  // #5633C7 - blue-purple
         0xFF134E1A.toInt(),  // #134E1A - dark green
-        0xFF65637E.toInt()   // #65637E - slate
+        0xFFFF4F00.toInt()   // #FF4F00 - hunter orange (strongest)
     )
 
     // Data
@@ -312,6 +314,8 @@ class SpectrogramView @JvmOverloads constructor(
                 if (Math.abs(selectionEnd - selectionStart) < 50) {
                     selectionStart = -1f
                     selectionEnd = -1f
+                } else {
+                    getSelectionTimeRange()?.let { onSelectionEnd?.invoke(it) }
                 }
                 postInvalidate()
                 return true
@@ -356,4 +360,7 @@ class SpectrogramView @JvmOverloads constructor(
         selectionEnd = -1f
         postInvalidate()
     }
+
+    /** Fired when a drag selection completes: (startSec, endSec) of the stream. */
+    var onSelectionEnd: ((Pair<Double, Double>) -> Unit)? = null
 }
