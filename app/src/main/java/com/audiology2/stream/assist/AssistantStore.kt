@@ -15,8 +15,8 @@ import kotlinx.coroutines.flow.map
 object AssistantStore {
 
     data class Config(
-        val baseUrl: String = "https://api.openai.com/v1",
-        val model: String = "gpt-4o-mini",
+        val baseUrl: String = "https://openrouter.ai/api/v1",
+        val model: String = "openai/gpt-oss-120b:free",
         val apiKey: String = "",
         val hasKey: Boolean = false
     )
@@ -32,8 +32,8 @@ object AssistantStore {
         val encrypted = prefs[KEY_ENCRYPTED] ?: ""
         val key = if (encrypted.isNotEmpty()) KeystoreCrypto.decrypt(encrypted) ?: "" else ""
         Config(
-            baseUrl = prefs[KEY_BASE_URL] ?: "https://api.openai.com/v1",
-            model = prefs[KEY_MODEL] ?: "gpt-4o-mini",
+            baseUrl = prefs[KEY_BASE_URL] ?: "https://openrouter.ai/api/v1",
+            model = prefs[KEY_MODEL] ?: "openai/gpt-oss-120b:free",
             apiKey = key,
             hasKey = key.isNotEmpty()
         )
@@ -48,8 +48,8 @@ object AssistantStore {
             KeystoreCrypto.encrypt(apiKey) ?: ""
         }
         store.edit { prefs ->
-            prefs[KEY_BASE_URL] = baseUrl.trim().ifEmpty { "https://api.openai.com/v1" }
-            prefs[KEY_MODEL] = model.trim().ifEmpty { "gpt-4o-mini" }
+            prefs[KEY_BASE_URL] = baseUrl.trim().ifEmpty { "https://openrouter.ai/api/v1" }
+            prefs[KEY_MODEL] = model.trim().ifEmpty { "openai/gpt-oss-120b:free" }
             if (encrypted.isNotEmpty()) prefs[KEY_ENCRYPTED] = encrypted
         }
     }

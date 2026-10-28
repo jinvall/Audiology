@@ -580,8 +580,19 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private fun loadAssistantConfig() {
         lifecycleScope.launch {
             val cfg = com.audiology2.stream.assist.AssistantStore.currentConfig()
-            binding.assistantBaseUrl.setText(cfg.baseUrl)
-            binding.assistantModel.setText(cfg.model)
+            // Migration: the shipped default is now OpenRouter free. If the
+            // stored config is still the legacy OpenAI default (never
+            // customized), adopt the new default and keep the encrypted key.
+            if (cfg.baseUrl == "https://api.openai.com/v1" && cfg.model == "gpt-4o-mini") {
+                com.audiology2.stream.assist.AssistantStore.saveConfig(
+                    "https://openrouter.ai/api/v1", "openai/gpt-oss-120b:free", cfg.apiKey
+                )
+                binding.assistantBaseUrl.setText("https://openrouter.ai/api/v1")
+                binding.assistantModel.setText("openai/gpt-oss-120b:free")
+            } else {
+                binding.assistantBaseUrl.setText(cfg.baseUrl)
+                binding.assistantModel.setText(cfg.model)
+            }
             binding.assistantKey.setText(if (cfg.hasKey) "••••••••" else "")
         }
     }
