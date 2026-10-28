@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.okhttp)
     kapt(libs.room.compiler)
 
     testImplementation(libs.junit)

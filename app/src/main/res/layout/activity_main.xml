@@ -1148,6 +1148,152 @@
                 android:backgroundTint="@color/srp_danger" />
         </LinearLayout>
 
+        <!-- ===== Assistant ===== -->
+        <LinearLayout
+            android:id="@+id/header_assistant"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="ASSISTANT"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_assistant"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_assistant"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:background="@color/srp_surface">
+
+                <TextView
+                    android:id="@+id/assistantTranscript"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:text="Assistant ready. Example: &quot;add a track named drums&quot;, &quot;set tempo to 128&quot;, &quot;make a sample from the vocal clip&quot;"
+                    android:textColor="@color/srp_text"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace" />
+            </ScrollView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp">
+
+                <EditText
+                    android:id="@+id/assistantInput"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Command the DAW..."
+                    android:imeOptions="actionSend"
+                    android:inputType="text"
+                    android:maxLines="2"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <Button
+                    android:id="@+id/btnAssistantSend"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Send" />
+
+                <Button
+                    android:id="@+id/btnAssistantMic"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Mic" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp">
+
+                <EditText
+                    android:id="@+id/assistantBaseUrl"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Base URL"
+                    android:inputType="textUri"
+                    android:textSize="11sp"
+                    android:padding="6dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text_muted" />
+
+                <EditText
+                    android:id="@+id/assistantModel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:hint="Model"
+                    android:inputType="text"
+                    android:textSize="11sp"
+                    android:padding="6dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text_muted" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp">
+
+                <EditText
+                    android:id="@+id/assistantKey"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="API key (stored encrypted)"
+                    android:inputType="textPassword"
+                    android:textSize="11sp"
+                    android:padding="6dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text_muted" />
+
+                <Button
+                    android:id="@+id/btnAssistantSaveKey"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Save" />
+            </LinearLayout>
+        </LinearLayout>
+
         <!-- ===== Spectral Tools ===== -->
         <LinearLayout
             android:id="@+id/header_spectral"

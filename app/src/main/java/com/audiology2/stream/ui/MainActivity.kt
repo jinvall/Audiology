@@ -31,6 +31,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.audiology2.stream.R
+import com.audiology2.stream.assist.AssistantProtocol
+import com.audiology2.stream.assist.AssistantProtocol.ActionResult
+import com.audiology2.stream.assist.AssistantProtocol.Tool.ArgSpec
+import com.audiology2.stream.assist.AssistantProtocol.Tool
 import com.audiology2.stream.audio.AudioPlayer
 import com.audiology2.stream.audio.CaptureStats
 import com.audiology2.stream.config.AppSettings
@@ -94,6 +98,12 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     // ---- Spectral tools state (owned by SpectralCardController) ----
     private lateinit var spectralCard: SpectralCardController
+
+    // Assistant
+    private val assistantEngine = com.audiology2.stream.assist.AssistantEngine()
+    private val assistantTools = com.audiology2.stream.assist.DawToolbox()
+    private val assistantPairs = mutableListOf<Pair<String, String>>()
+    private var speechRecognizer: android.speech.SpeechRecognizer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Force LTR before super.onCreate so window is configured before view inflation
@@ -434,6 +444,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.trackTimelineView.onMidiClipTap = { midi -> openMidiEditor(midi) }
         binding.btnSpectralCapture.setOnClickListener { capturePitchToMidi() }
         binding.btnSpectralCopy.setOnClickListener { spectralCard.copyPeak() }
+        setupAssistant()
         setupMidiEditor()
         
         binding.btnZoomFit.setOnClickListener { binding.trackTimelineView.zoomToFit() }
@@ -542,6 +553,344 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.trackTimelineView.setProject(updated)
         binding.trackTimelineView.postInvalidate()
         Log.d("Editor", "Deleted clip: $clipId")
+    }
+
+    // ===== Assistant (Tier 1: text/voice DAW commands) =====
+
+    private fun setupAssistant() {
+        registerAssistantTools()
+        loadAssistantConfig()
+
+        binding.btnAssistantSend.setOnClickListener { sendAssistantCommand(binding.assistantInput.text.toString()) }
+        binding.assistantInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                sendAssistantCommand(binding.assistantInput.text.toString())
+                true
+            } else false
+        }
+        binding.btnAssistantMic.setOnClickListener { startAssistantVoiceInput() }
+        binding.btnAssistantSaveKey.setOnClickListener { saveAssistantConfig() }
+    }
+
+    private fun refreshTimeline() {
+        binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
+        binding.trackTimelineView.postInvalidate()
+    }
+
+    private fun loadAssistantConfig() {
+        lifecycleScope.launch {
+            val cfg = com.audiology2.stream.assist.AssistantStore.currentConfig()
+            binding.assistantBaseUrl.setText(cfg.baseUrl)
+            binding.assistantModel.setText(cfg.model)
+            binding.assistantKey.setText(if (cfg.hasKey) "••••••••" else "")
+        }
+    }
+
+    private fun saveAssistantConfig() {
+        lifecycleScope.launch {
+            val entered = binding.assistantKey.text.toString()
+            val key = if (entered == "••••••••") {
+                com.audiology2.stream.assist.AssistantStore.currentConfig().apiKey
+            } else entered
+            com.audiology2.stream.assist.AssistantStore.saveConfig(
+                binding.assistantBaseUrl.text.toString(),
+                binding.assistantModel.text.toString(),
+                key.trim()
+            )
+            Toast.makeText(this@MainActivity, "Assistant settings saved", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun projectSnapshot(): com.audiology2.stream.assist.AssistantProtocol.ProjectContext {
+        val p = ProjectManager.getCurrentProject() ?: return com.audiology2.stream.assist.AssistantProtocol.ProjectContext()
+        return com.audiology2.stream.assist.AssistantProtocol.ProjectContext(
+            name = p.name,
+            tempo = p.tempo,
+            timeSignature = "${p.timeSignatureNumerator}/${p.timeSignatureDenominator}",
+            tracks = p.tracks.map { t ->
+                com.audiology2.stream.assist.AssistantProtocol.TrackCtx(
+                    id = t.id, name = t.name, muted = t.muted, solo = t.solo,
+                    clips = t.clips.map { c ->
+                        com.audiology2.stream.assist.AssistantProtocol.ClipCtx(
+                            id = c.id, name = c.name, startSec = c.startTime,
+                            durationSec = c.duration, pitchSemitones = c.pitchSemitones,
+                            speedRatio = c.speedRatio
+                        )
+                    },
+                    midiClips = t.midiClips.map { it.name }
+                )
+            }
+        )
+    }
+
+    /** Resolve a clip by name substring; falls back to selection, then first clip. */
+    private fun resolveAssistantClip(name: String?): com.audiology2.stream.ui.Clip? {
+        val project = ProjectManager.getCurrentProject() ?: return null
+        if (!name.isNullOrBlank()) {
+            val hit = project.tracks.firstNotNullOfOrNull { t ->
+                t.clips.firstOrNull { it.name.contains(name, ignoreCase = true) }
+            }
+            if (hit != null) return hit
+        }
+        return currentSelectionClip() ?: project.tracks.firstOrNull()?.clips?.firstOrNull()
+    }
+
+    private fun registerAssistantTools() {
+        val toolbox = assistantTools
+        toolbox.register(
+            Tool("set_tempo", "Set project tempo (BPM)", mapOf("bpm" to ArgSpec("number", "BPM 40-300", true)))
+        ) { call ->
+            val bpm = call.argDouble("bpm") ?: return@register ActionResult(false, "No BPM given")
+            ProjectManager.updateCurrentProject { it.copy(tempo = bpm.coerceIn(40.0, 300.0)) }
+            snapGrid.tempo = bpm
+            binding.trackTimelineView.setSnapGrid(snapGrid)
+            refreshTimeline()
+            ActionResult(true, "Tempo set to ${bpm.roundToInt()} BPM")
+        }
+        toolbox.register(
+            Tool("add_track", "Add a new track", mapOf("name" to ArgSpec("string", "Track name (optional)")))
+        ) { call ->
+            val name = call.argString("name")
+            val n = (ProjectManager.getCurrentProject()?.tracks?.size ?: 0) + 1
+            ProjectManager.updateCurrentProject { it.addTrack(name = name ?: "Track $n") }
+            refreshTimeline()
+            ActionResult(true, "Added track '${name ?: "Track $n"}'")
+        }
+        toolbox.register(
+            Tool("split_clip", "Split a clip", mapOf(
+                "clipName" to ArgSpec("string", "Clip to split"),
+                "atFraction" to ArgSpec("number", "0-1 fraction (default 0.5)")
+            ))
+        ) { call ->
+            val clip = resolveAssistantClip(call.argString("clipName"))
+                ?: return@register ActionResult(false, "No clip found to split")
+            val fraction = (call.argDouble("atFraction") ?: 0.5).coerceIn(0.01, 0.99)
+            val pair = clip.splitAt(clip.duration * fraction)
+                ?: return@register ActionResult(false, "Split failed")
+            val (left, right) = pair
+            val track = ProjectManager.getCurrentProject()?.getTrack(clip.trackId)
+                ?: return@register ActionResult(false, "Clip track missing")
+            val remaining = track.clips.filterNot { it.id == clip.id }
+            val newClips = (remaining + left + right).sortedBy { it.startTime }
+            ProjectManager.updateCurrentProject { it.updateTrackClips(clip.trackId, newClips) }
+            refreshTimeline()
+            ActionResult(true, "Split '${clip.name}' at ${(fraction * 100).roundToInt()}%")
+        }
+        toolbox.register(
+            Tool("duplicate_clip", "Duplicate a clip", mapOf("clipName" to ArgSpec("string", "Clip to duplicate")))
+        ) { call ->
+            val clip = resolveAssistantClip(call.argString("clipName"))
+                ?: return@register ActionResult(false, "No clip found to duplicate")
+            val track = ProjectManager.getCurrentProject()?.getTrack(clip.trackId)
+                ?: return@register ActionResult(false, "Clip track missing")
+            val dup = clip.with(id = java.util.UUID.randomUUID().toString(), name = "${clip.name} (copy)", startTime = clip.endTime)
+            ProjectManager.updateCurrentProject { it.updateTrack(track.appendClip(dup)) }
+            refreshTimeline()
+            ActionResult(true, "Duplicated '${clip.name}'")
+        }
+        toolbox.register(
+            Tool("delete_clip", "Delete a clip", mapOf("clipName" to ArgSpec("string", "Clip to delete")))
+        ) { call ->
+            val clip = resolveAssistantClip(call.argString("clipName"))
+                ?: return@register ActionResult(false, "No clip found to delete")
+            val track = ProjectManager.getCurrentProject()?.getTrack(clip.trackId)
+                ?: return@register ActionResult(false, "Clip track missing")
+            ProjectManager.updateCurrentProject { it.updateTrack(track.removeClip(clip.id)) }
+            refreshTimeline()
+            ActionResult(true, "Deleted '${clip.name}'")
+        }
+        toolbox.register(
+            Tool("pitch_speed", "Change pitch/speed of a clip", mapOf(
+                "clipName" to ArgSpec("string", "Clip to edit"),
+                "semitones" to ArgSpec("number", "Semitones (-12..12)"),
+                "speed" to ArgSpec("number", "Speed ratio (0.5-2)"),
+                "stretch" to ArgSpec("number", "Stretch ratio (0.5-2)")
+            ))
+        ) { call ->
+            val clip = resolveAssistantClip(call.argString("clipName"))
+                ?: return@register ActionResult(false, "No clip found")
+            val st = call.argDouble("semitones") ?: 0.0
+            val sp = call.argDouble("speed") ?: 1.0
+            val tt = call.argDouble("stretch") ?: 1.0
+            val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+            if (!busy.compareAndSet(false, true)) return@register ActionResult(false, "Busy")
+            editorScope.launch {
+                val result = clipEditor.applyPitchSpeed(clip, st, sp, tt, preview = false)
+                busy.set(false)
+                if (result != null) {
+                    ProjectManager.updateCurrentProject { project ->
+                        val track = project.getTrack(clip.trackId) ?: return@updateCurrentProject project
+                        project.updateTrack(track.updateClip(clip.copy(
+                            sourcePath = result.outputFile.absolutePath, sourceOffset = 0.0,
+                            duration = result.finalDurationSec, pitchSemitones = st, speedRatio = sp, stretchRatio = tt
+                        )))
+                    }
+                    runOnUiThread { refreshTimeline() }
+                    appendAssistantResult(ActionResult(true, "Applied pitch ${st}st speed ${sp}x to '${clip.name}'"))
+                } else {
+                    appendAssistantResult(ActionResult(false, "Pitch/speed failed on '${clip.name}'"))
+                }
+            }
+            ActionResult(true, "Processing pitch/speed...")
+        }
+        toolbox.register(
+            Tool("make_sample", "Make a beat sample from a clip", mapOf("clipName" to ArgSpec("string", "Clip to sample")))
+        ) { call ->
+            val clip = resolveAssistantClip(call.argString("clipName"))
+                ?: return@register ActionResult(false, "No clip found")
+            val project = ProjectManager.getCurrentProject() ?: return@register ActionResult(false, "No project")
+            val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+            if (!busy.compareAndSet(false, true)) return@register ActionResult(false, "Busy")
+            editorScope.launch {
+                val res = sampleMaker.makeSample(clip, project, thresholdDb = -48.0, normalize = true, snapToBeat = true)
+                busy.set(false)
+                if (res != null) {
+                    ProjectManager.updateCurrentProject { p ->
+                        var bt = p.tracks.firstOrNull { it.name.equals("Beats", true) }
+                        var w = p
+                        if (bt == null) { w = p.addTrack(name = "Beats", color = 0xFFFFD700.toInt()); bt = w.tracks.last() }
+                        val sc = Clip(name = "${clip.name} (sample)", sourcePath = res.sampleFile.absolutePath,
+                            duration = res.durationSec, startTime = res.placedAt, trackId = bt!!.id, color = 0xFFFFD700.toInt())
+                        w.updateTrack(bt.insertClip(sc, res.placedAt))
+                    }
+                    runOnUiThread { refreshTimeline() }
+                    appendAssistantResult(ActionResult(true, "Sample '${clip.name}' placed on Beats at ${String.format("%.2f", res.placedAt)}s"))
+                } else {
+                    appendAssistantResult(ActionResult(false, "Sample creation failed"))
+                }
+            }
+            ActionResult(true, "Making sample from '${clip.name}'...")
+        }
+        toolbox.register(
+            Tool("set_loop", "Loop a region", mapOf(
+                "clipName" to ArgSpec("string", "Clip to loop (optional)"),
+                "startSec" to ArgSpec("number", "Loop start"),
+                "endSec" to ArgSpec("number", "Loop end")
+            ))
+        ) { call ->
+            val start = call.argDouble("startSec")
+            val end = call.argDouble("endSec")
+            when {
+                start != null && end != null && end > start -> {
+                    audioPlayer.setLoop(start, end)
+                    binding.trackTimelineView.setLoopRegion(start, end)
+                    binding.btnLoop.setColorFilter(0xFFFFB300.toInt())
+                    loopActive = true
+                    ActionResult(true, "Looping ${String.format("%.2f", start)}-${String.format("%.2f", end)}s")
+                }
+                else -> {
+                    val clip = resolveAssistantClip(call.argString("clipName"))
+                    if (clip != null) {
+                        audioPlayer.setLoop(clip.startTime, clip.endTime)
+                        binding.trackTimelineView.setLoopRegion(clip.startTime, clip.endTime)
+                        binding.btnLoop.setColorFilter(0xFFFFB300.toInt())
+                        loopActive = true
+                        ActionResult(true, "Looping '${clip.name}'")
+                    } else {
+                        ActionResult(false, "Give a start/end or select a clip to loop")
+                    }
+                }
+            }
+        }
+        toolbox.register(
+            Tool("add_midi_clip", "Add a MIDI clip and open the editor", mapOf("name" to ArgSpec("string", "Name (optional)")))
+        ) { call ->
+            addMidiClip()
+            ActionResult(true, "MIDI clip added - the editor is open below")
+        }
+        toolbox.register(
+            Tool("export_wav", "Export the project to WAV", mapOf())
+        ) {
+            showExportDialog()
+            ActionResult(true, "Export dialog opened")
+        }
+    }
+
+    private fun appendAssistantLine(line: String) {
+        runOnUiThread {
+            val existing = binding.assistantTranscript.text.toString()
+            val lines = (existing.split("\n") + ">> $line").takeLast(24)
+            binding.assistantTranscript.text = lines.joinToString("\n")
+        }
+    }
+
+    private fun appendAssistantResult(result: com.audiology2.stream.assist.AssistantProtocol.ActionResult) {
+        val prefix = if (result.ok) "OK: " else "FAIL: "
+        appendAssistantLine(prefix + result.message)
+        binding.assistantTranscript.post {
+            (binding.assistantTranscript.parent as? android.widget.ScrollView)?.fullScroll(android.view.View.FOCUS_DOWN)
+        }
+    }
+
+    private fun sendAssistantCommand(raw: String) {
+        val text = raw.trim()
+        if (text.isEmpty()) return
+        binding.assistantInput.setText("")
+        appendAssistantLine("YOU: $text")
+        if (!assistantTools.tools.any { it.name != "none" }) {
+            registerAssistantTools()
+        }
+        editorScope.launch {
+            val cfg = com.audiology2.stream.assist.AssistantStore.currentConfig()
+            if (!cfg.hasKey) {
+                appendAssistantResult(com.audiology2.stream.assist.AssistantProtocol.ActionResult(false, "No API key saved - enter one in this card's settings to enable the assistant"))
+                return@launch
+            }
+            val prompt = com.audiology2.stream.assist.AssistantProtocol.buildSystemPrompt(assistantTools.tools, projectSnapshot())
+            val call = assistantEngine.requestIntent(cfg.baseUrl, cfg.model, cfg.apiKey, prompt, assistantPairs.takeLast(6))
+            if (call.intent.isBlank() || call.intent == "none") {
+                appendAssistantLine("AI: ${call.reply.ifEmpty { "I didn't catch that." }}")
+            } else {
+                val result = assistantTools.execute(call)
+                appendAssistantLine("AI: ${call.reply.ifEmpty { result.message }}")
+                appendAssistantResult(result)
+            }
+            assistantPairs.add(text to (call.reply.ifEmpty { "" }))
+            if (assistantPairs.size > 8) assistantPairs.removeAt(0)
+        }
+    }
+
+    private fun startAssistantVoiceInput() {
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            Toast.makeText(this, "Speech recognition not available", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (speechRecognizer == null) {
+            speechRecognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
+                override fun onResults(results: android.os.Bundle?) {
+                    val text = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                    if (!text.isNullOrBlank()) {
+                        binding.assistantInput.setText(text)
+                        sendAssistantCommand(text)
+                    } else {
+                        appendAssistantLine("SPEECH: no words heard")
+                    }
+                }
+                override fun onError(error: Int) {
+                    val msg = when (error) {
+                        android.speech.SpeechRecognizer.ERROR_NO_MATCH -> "no match"
+                        android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "timeout"
+                        else -> "error $error"
+                    }
+                    appendAssistantLine("SPEECH: $msg")
+                }
+                override fun onReadyForSpeech(p: android.os.Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rms: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onPartialResults(partial: android.os.Bundle?) {}
+                override fun onEvent(type: Int, p: android.os.Bundle?) {}
+            })
+        }
+        val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        }
+        speechRecognizer?.startListening(intent)
+        Toast.makeText(this, "Listening...", Toast.LENGTH_SHORT).show()
     }
 
     // ===== MIDI editor =====
@@ -1932,6 +2281,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             Triple(binding.headerDiagnostics, binding.contentDiagnostics, binding.chevronDiagnostics),
             Triple(binding.headerControls, binding.contentControls, binding.chevronControls),
             Triple(binding.headerSpectral, binding.contentSpectral, binding.chevronSpectral),
+            Triple(binding.headerAssistant, binding.contentAssistant, binding.chevronAssistant),
             Triple(binding.headerEditor, binding.contentEditor, binding.chevronEditor)
         )
         sections.forEach { (header, content, chevron) ->
@@ -2296,5 +2646,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         super.onDestroy()
         if (bound) { unbindService(connection); bound = false }
         recordingCallback?.let { service?.unregisterRecordingCallback(it) }
+        runCatching { speechRecognizer?.destroy() }
+        speechRecognizer = null
     }
 }
