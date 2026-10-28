@@ -1,0 +1,102 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Audiology2</string>
+    <string name="app_title">Audiology2 — Mic Stream</string>
+    <string name="section_connection">Connection</string>
+    <string name="label_host">Receiver host</string>
+    <string name="label_port">UDP/TCP port</string>
+    <string name="label_transport">Transport</string>
+    <string name="label_sample_rate">Sample rate (Hz)</string>
+    <string name="label_channels">Channels</string>
+    <string name="label_packet_ms">Packet duration (ms)</string>
+    <string name="label_jitter_ms">Jitter buffer (ms)</string>
+    <string name="label_reconnect">Auto-reconnect</string>
+    <string name="hint_host">e.g. 192.168.1.10</string>
+    <string name="error_invalid_host">Invalid host or IP address</string>
+    <string name="error_invalid_port">Port must be between 1 and 65535</string>
+    <string name="section_capture">Microphone &amp; Capture</string>
+    <string name="label_input_source">Input source</string>
+    <string name="label_input_device">Input device</string>
+    <string name="label_buffer_ms">Buffer size (ms)</string>
+    <string name="state_silence">Silence</string>
+    <string name="state_active">Active</string>
+    <string name="state_paused">Paused</string>
+    <string name="state_no_permission">Permission denied</string>
+    <string name="section_sensitivity">Sensitivity &amp; Gain</string>
+    <string name="label_digital_gain">Digital gain (dB)</string>
+    <string name="label_max_sensitivity">Maximum sensitivity mode</string>
+    <string name="label_raw_bypass">Raw / unprocessed bypass</string>
+    <string name="section_processing">Audio Processing</string>
+    <string name="label_agc">Automatic gain control</string>
+    <string name="label_noise_suppress">Noise suppression</string>
+    <string name="label_highpass">High-pass filter (Hz)</string>
+    <string name="label_lowpass">Low-pass filter (Hz)</string>
+    <string name="label_notch_freq">Notch frequency (Hz)</string>
+    <string name="label_notch_q">Notch Q</string>
+    <string name="label_eq_freq">EQ frequency (Hz)</string>
+    <string name="label_eq_gain">EQ gain (dB)</string>
+    <string name="label_eq_bandwidth">EQ bandwidth (octaves)</string>
+    <string name="label_comp_threshold">Compressor threshold (dBFS)</string>
+    <string name="label_comp_ratio">Compressor ratio</string>
+    <string name="label_comp_attack">Compressor attack (ms)</string>
+    <string name="label_comp_release">Compressor release (ms)</string>
+    <string name="label_limiter">Limiter</string>
+    <string name="label_processing_order">Processing order</string>
+    <string name="label_ab_bypass">Bypass (A/B)</string>
+    <string name="section_presets">Presets</string>
+    <string name="preset_max_sensitivity">Maximum Sensitivity</string>
+    <string name="preset_low_latency">Low Latency</string>
+    <string name="preset_clean_monitor">Clean Monitoring</string>
+    <string name="preset_speech_detail">Speech Detail</string>
+    <string name="preset_raw">Raw / unprocessed</string>
+    <string name="preset_stable_net">Stable Network</string>
+    <string name="action_save_preset">Save current as preset</string>
+    <string name="action_reset_defaults">Reset to defaults</string>
+    <string name="section_diagnostics">Live Meters &amp; Diagnostics</string>
+    <string name="section_controls">Controls</string>
+    <string name="section_editor">Editor / Timeline</string>
+    <string name="label_rms">RMS (dBFS)</string>
+    <string name="label_peak">Peak (dBFS)</string>
+    <string name="label_clipping">Clipping</string>
+    <string name="label_packets_sent">Packets sent</string>
+    <string name="label_packets_lost">Packets lost (est.)</string>
+    <string name="label_loss_pct">Loss %</string>
+    <string name="label_buffer_occupancy">Queue depth</string>
+    <string name="label_out_rate">Send rate (pkts/s)</string>
+    <string name="label_config">Active config</string>
+    <string name="label_status">Status</string>
+    <string name="label_session">Session</string>
+    <string name="label_device">Device</string>
+    <string name="perm_rationale">Audiology2 needs microphone permission to capture and stream audio. Grant it in settings.</string>
+    <string name="desc_rewind">Rewind</string>
+    <string name="desc_play">Play</string>
+    <string name="desc_stop">Stop</string>
+    <string name="desc_fast_forward">Fast Forward</string>
+    <string name="desc_record">Record</string>
+    <string name="label_spectrogram">Spectrogram</string>
+    <string name="label_waveform">Waveform</string>
+    <string name="action_zoom_fit">Zoom Fit</string>
+    <string name="action_zoom_sel">Zoom Selection</string>
+    <string name="label_tracks_placeholder">Multi-track timeline coming soon...</string>
+    <string name="action_add_track">Add Track</string>
+    <string name="action_delete_track">Delete Track</string>
+    <string name="action_split">Split</string>
+    <string name="action_duplicate">Duplicate</string>
+    <string name="action_delete">Delete</string>
+
+    <!-- Editor Toolbar -->
+    <string name="desc_undo">Undo</string>
+    <string name="desc_redo">Redo</string>
+    <string name="label_snap">Snap:</string>
+
+    <string-array name="snap_modes">
+        <item>Off</item>
+        <item>Seconds</item>
+        <item>Frames</item>
+        <item>Beats</item>
+        <item>Measures</item>
+        <item>8th Notes</item>
+        <item>16th Notes</item>
+        <item>Triplets</item>
+    </string-array>
+</resources>

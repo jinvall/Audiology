@@ -1,0 +1,1309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:layoutDirection="ltr"
+    android:background="@color/srp_bg"
+    android:padding="12dp">
+
+    <!-- ===== App header (always visible) ===== -->
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/app_title"
+        android:textColor="@color/srp_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingBottom="8dp" />
+
+    <!-- ===== Status (always visible) ===== -->
+    <LinearLayout
+        android:id="@+id/status_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="@drawable/card_bg">
+        <TextView
+            android:id="@+id/stateBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DISCONNECTED"
+            android:textColor="@color/srp_text"
+            android:textStyle="bold"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:background="@drawable/badge_neutral" />
+        <TextView
+            android:id="@+id/remoteText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="host:port"
+            android:textColor="@color/srp_text_muted"
+            android:paddingStart="8dp" />
+    </LinearLayout>
+
+    <!-- Scroll container is a fallback: the panels below collapse by default, so
+         the whole control set fits one screen; expand several and you scroll. -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layoutDirection="ltr">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layoutDirection="ltr">
+
+        <!-- ===== Connection ===== -->
+        <LinearLayout
+            android:id="@+id/header_connection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_connection"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_connection"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+<LinearLayout
+            android:id="@+id/content_connection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layoutDirection="ltr"
+            android:background="@drawable/card_bg"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:inputType="textUri|textNoSuggestions"
+                android:cursorVisible="true"
+                android:id="@+id/hostEdit"
+                android:privateImeOptions="textDirection=ltr"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_host"
+                android:textColorHint="@color/srp_text_subtle"
+                android:padding="8dp"
+                android:background="@drawable/input_bg"
+                android:textColor="@color/srp_text" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="6dp">
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:inputType="number|textNoSuggestions"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                android:id="@+id/portEdit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/label_port"
+                android:textColorHint="@color/srp_text_subtle"
+                android:padding="8dp"
+                android:background="@drawable/input_bg"
+                android:textColor="@color/srp_text" />
+
+                <Spinner
+                    android:id="@+id/transportSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/input_bg"
+                    android:entries="@array/transport_options"
+                    android:gravity="center"
+                    android:spinnerMode="dropdown"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="6dp">
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:inputType="number|textNoSuggestions"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                android:id="@+id/sampleRateEdit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/label_sample_rate"
+                android:textColorHint="@color/srp_text_subtle"
+                android:padding="8dp"
+                android:background="@drawable/input_bg"
+                android:textColor="@color/srp_text" />
+
+                <Spinner
+                    android:id="@+id/channelSpinner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/input_bg"
+                    android:entries="@array/channel_options"
+                    android:gravity="center"
+                    android:spinnerMode="dropdown"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="6dp">
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:inputType="number|textNoSuggestions"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                android:id="@+id/packetMsEdit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/label_packet_ms"
+                android:textColorHint="@color/srp_text_subtle"
+                android:padding="8dp"
+                android:background="@drawable/input_bg"
+                android:textColor="@color/srp_text" />
+
+            <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:inputType="number|textNoSuggestions"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                android:id="@+id/jitterMsEdit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:hint="@string/label_jitter_ms"
+                android:textColorHint="@color/srp_text_subtle"
+                android:padding="8dp"
+                android:background="@drawable/input_bg"
+                android:textColor="@color/srp_text" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/reconnectSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/label_reconnect"
+                android:paddingTop="6dp"
+                android:textColor="@color/srp_text" />
+        </LinearLayout>
+
+        <!-- ===== Microphone & capture ===== -->
+        <LinearLayout
+            android:id="@+id/header_capture"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_capture"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_capture"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_capture"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <Spinner
+                android:id="@+id/inputSourceSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/input_bg"
+                android:entries="@array/input_source_options"
+                android:gravity="center_vertical"
+                android:padding="8dp"
+                android:prompt="@string/label_input_source"
+                android:spinnerMode="dropdown"
+                android:textColor="@color/srp_text"
+                android:textColorHint="@color/srp_text_subtle" />
+
+                <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:inputType="number|textNoSuggestions"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                android:id="@+id/bufferMsEdit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:hint="@string/label_buffer_ms"
+                android:padding="8dp"
+                android:background="@drawable/input_bg"
+                android:textColor="@color/srp_text"
+                android:textColorHint="@color/srp_text_subtle" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/maxSensitivitySwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/label_max_sensitivity"
+                android:paddingTop="6dp"
+                android:textColor="@color/srp_text" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/rawBypassSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/label_raw_bypass"
+                android:paddingTop="4dp"
+                android:textColor="@color/srp_text" />
+        </LinearLayout>
+
+        <!-- ===== Sensitivity & gain ===== -->
+        <LinearLayout
+            android:id="@+id/header_sensitivity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_sensitivity"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_sensitivity"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_sensitivity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/gainLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:text="@string/label_digital_gain"
+                android:textColor="@color/srp_text_muted" />
+
+            <com.audiology2.stream.ui.RotaryKnob
+                android:id="@+id/gainKnob"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:contentDescription="@string/label_digital_gain"
+                app:minValue="-60"
+                app:maxValue="60"
+                app:value="0"
+                app:step="1"
+                app:startAngle="-135"
+                app:sweepAngle="270" />
+        </LinearLayout>
+
+        <!-- ===== Audio processing ===== -->
+        <LinearLayout
+            android:id="@+id/header_processing"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_processing"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_processing"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_processing"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/agcSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/label_agc"
+                android:textColor="@color/srp_text" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/nsupSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/label_noise_suppress"
+                android:paddingTop="4dp"
+                android:textColor="@color/srp_text" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                    android:id="@+id/hpfHzEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="@string/label_highpass"
+                    android:inputType="number|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/label_highpass"
+                    android:gravity="center"
+                    android:paddingStart="6dp"
+                    android:textColor="@color/srp_text_muted" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/hpfSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="6dp"
+                    android:text="HPF"
+                    android:textColor="@color/srp_text" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                    android:id="@+id/lpfHzEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="@string/label_lowpass"
+                    android:inputType="number|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/label_lowpass"
+                    android:gravity="center"
+                    android:paddingStart="6dp"
+                    android:textColor="@color/srp_text_muted" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/lpfSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="6dp"
+                    android:text="LPF"
+                    android:textColor="@color/srp_text" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                    android:id="@+id/notchHzEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="@string/label_notch_freq"
+                    android:inputType="number|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                    android:id="@+id/notchQEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="@string/label_notch_q"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/notchSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="6dp"
+                    android:text="Notch"
+                    android:textColor="@color/srp_text" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                    android:id="@+id/eqHzEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="@string/label_eq_freq"
+                    android:inputType="number|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                    android:id="@+id/eqGainEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="@string/label_eq_gain"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                    <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                    android:id="@+id/eqBwEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="@string/label_eq_bandwidth"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/eqSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="EQ"
+                    android:textColor="@color/srp_text" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                        <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                        android:id="@+id/compThreshEdit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="@string/label_comp_threshold"
+                        android:inputType="numberDecimal|textNoSuggestions"
+                        android:padding="8dp"
+                        android:background="@drawable/input_bg"
+                        android:textColor="@color/srp_text"
+                        android:textColorHint="@color/srp_text_subtle" />
+
+                        <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                        android:id="@+id/compRatioEdit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:hint="@string/label_comp_ratio"
+                        android:inputType="numberDecimal|textNoSuggestions"
+                        android:padding="8dp"
+                        android:background="@drawable/input_bg"
+                        android:textColor="@color/srp_text"
+                        android:textColorHint="@color/srp_text_subtle" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="6dp">
+
+                        <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                        android:id="@+id/compAttackEdit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="@string/label_comp_attack"
+                        android:inputType="numberDecimal|textNoSuggestions"
+                        android:padding="8dp"
+                        android:background="@drawable/input_bg"
+                        android:textColor="@color/srp_text"
+                        android:textColorHint="@color/srp_text_subtle" />
+
+                        <EditText
+                android:textDirection="ltr"
+                android:layoutDirection="ltr"
+                android:cursorVisible="true"
+                android:privateImeOptions="textDirection=ltr"
+                        android:id="@+id/compReleaseEdit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:hint="@string/label_comp_release"
+                        android:inputType="numberDecimal|textNoSuggestions"
+                        android:padding="8dp"
+                        android:background="@drawable/input_bg"
+                        android:textColor="@color/srp_text"
+                        android:textColorHint="@color/srp_text_subtle" />
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/compSwitch"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:text="Comp"
+                        android:textColor="@color/srp_text" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/limiterSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/label_limiter"
+                android:textColor="@color/srp_text" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/abSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="6dp"
+                android:text="@string/label_ab_bypass"
+                android:textColor="@color/srp_text" />
+        </LinearLayout>
+
+        <!-- ===== Presets ===== -->
+        <LinearLayout
+            android:id="@+id/header_presets"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_presets"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_presets"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_presets"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <Spinner
+                android:id="@+id/presetSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/input_bg"
+                android:entries="@array/preset_options"
+                android:gravity="center_vertical"
+                android:padding="8dp"
+                android:spinnerMode="dropdown"
+                android:prompt="@string/section_presets"
+                android:textColor="@color/srp_text"
+                android:textColorHint="@color/srp_text_subtle" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="6dp">
+
+                <Button
+                    android:id="@+id/savePresetBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/action_save_preset"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_marginEnd="4dp" />
+
+                <Button
+                    android:id="@+id/resetPresetBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/action_reset_defaults"
+                    style="?android:attr/borderlessButtonStyle" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ===== Diagnostics / Meters ===== -->
+        <LinearLayout
+            android:id="@+id/header_diagnostics"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_diagnostics"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_diagnostics"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_diagnostics"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:id="@+id/rmsBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="0"
+                android:progressDrawable="@null" />
+
+            <TextView
+                android:id="@+id/rmsText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_rms"
+                android:textColor="@color/srp_text_muted" />
+
+            <ProgressBar
+                android:id="@+id/peakBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:max="100"
+                android:progress="0"
+                android:progressDrawable="@null" />
+
+            <TextView
+                android:id="@+id/peakText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_peak"
+                android:textColor="@color/srp_text_muted" />
+
+            <TextView
+                android:id="@+id/clippingText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/label_clipping"
+                android:textColor="@color/srp_danger" />
+
+            <TextView
+                android:id="@+id/captureStateText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/state_no_permission"
+                android:textColor="@color/srp_text_muted" />
+
+            <TextView
+                android:id="@+id/configText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/label_config"
+                android:textColor="@color/srp_text_muted" />
+        </LinearLayout>
+
+        <!-- ===== Diagnostics numbers ===== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="@drawable/card_bg">
+
+            <TextView
+                android:id="@+id/packetsSentText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_packets_sent"
+                android:textColor="@color/srp_text_muted" />
+
+            <TextView
+                android:id="@+id/packetsLostText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/label_packets_lost"
+                android:textColor="@color/srp_text_muted" />
+
+            <TextView
+                android:id="@+id/lossPctText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/label_loss_pct"
+                android:textColor="@color/srp_text_muted" />
+
+            <TextView
+                android:id="@+id/sendRateText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/label_out_rate"
+                android:textColor="@color/srp_text_muted" />
+
+            <TextView
+                android:id="@+id/queueDepthText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/label_buffer_occupancy"
+                android:textColor="@color/srp_text_muted" />
+        </LinearLayout>
+
+        <!-- ===== Controls ===== -->
+        <LinearLayout
+            android:id="@+id/header_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_controls"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_controls"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="8dp"
+            android:background="@drawable/card_bg"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/startBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="START"
+                android:textColor="@color/md_theme_dark_onPrimary"
+                android:backgroundTint="@color/srp_primary" />
+
+            <Button
+                android:id="@+id/stopBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:text="STOP"
+                android:textColor="@color/srp_text"
+                android:backgroundTint="@color/srp_danger" />
+        </LinearLayout>
+
+        <!-- ===== Editor / Timeline ===== -->
+        <LinearLayout
+            android:id="@+id/header_editor"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:padding="10dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/section_editor"
+                android:textColor="@color/srp_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/chevron_editor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9660;"
+                android:textColor="@color/srp_text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content_editor"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <!-- Transport controls -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:padding="8dp">
+
+                <ImageButton
+                    android:id="@+id/btnRewind"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_rewind"
+                    android:src="@android:drawable/ic_media_rew" />
+
+                <ImageButton
+                    android:id="@+id/btnPlay"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_play"
+                    android:src="@android:drawable/ic_media_play" />
+
+                <ImageButton
+                    android:id="@+id/btnStop"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_stop"
+                    android:src="@android:drawable/ic_media_pause" />
+
+                <ImageButton
+                    android:id="@+id/btnFastForward"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_fast_forward"
+                    android:src="@android:drawable/ic_media_ff" />
+
+                <ImageButton
+                    android:id="@+id/btnRecord"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="16dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_record"
+                    android:src="@android:drawable/ic_btn_speak_now"
+                    android:tint="@color/srp_danger" />
+
+            </LinearLayout>
+
+            <!-- Editor Toolbar -->
+            <LinearLayout
+                android:id="@+id/editorToolbar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="8dp"
+                android:layout_marginTop="8dp">
+
+                <!-- Undo/Redo -->
+                <ImageButton
+                    android:id="@+id/btnUndo"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_undo"
+                    android:src="@drawable/ic_undo"
+                    android:enabled="false" />
+
+                <ImageButton
+                    android:id="@+id/btnRedo"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_redo"
+                    android:src="@drawable/ic_redo"
+                    android:enabled="false" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@color/srp_text_muted" />
+
+                <!-- Zoom controls -->
+                <ImageButton
+                    android:id="@+id/btnZoomFit"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_zoom_fit"
+                    android:src="@drawable/ic_zoom_fit" />
+
+                <ImageButton
+                    android:id="@+id/btnZoomSelection"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_zoom_sel"
+                    android:src="@drawable/ic_zoom_selection" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@color/srp_text_muted" />
+
+                <!-- Snap Grid -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_snap"
+                    android:textColor="@color/srp_text_muted"
+                    android:textSize="14sp"
+                    android:layout_gravity="center_vertical" />
+
+                <Spinner
+                    android:id="@+id/spinnerSnapMode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:entries="@array/snap_modes"
+                    android:spinnerMode="dropdown" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@color/srp_text_muted" />
+
+                <!-- View toggles -->
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchWaveform"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_waveform"
+                    android:textColor="@color/srp_text"
+                    android:checked="true" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchSpectrogram"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text="@string/label_spectrogram"
+                    android:textColor="@color/srp_text" />
+
+            </LinearLayout>
+
+            <!-- Time display -->
+            <TextView
+                android:id="@+id/timelineTimeDisplay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:padding="8dp"
+                android:text="00:00.000 / 00:00.000"
+                android:textColor="@color/srp_text"
+                android:textSize="18sp"
+                android:fontFamily="monospace" />
+
+            <!-- Track list / timeline area -->
+            <FrameLayout
+                android:id="@+id/timelineContainer"
+                android:layout_width="match_parent"
+                android:layout_height="300dp"
+                android:layout_marginTop="8dp"
+                android:background="@color/srp_bg">
+
+                <!-- Waveform view (main track) -->
+                <com.audiology2.stream.ui.WaveformView
+                    android:id="@+id/mainWaveformView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <!-- Spectrogram overlay (toggleable) -->
+                <com.audiology2.stream.ui.SpectrogramView
+                    android:id="@+id/mainSpectrogramView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
+
+            </FrameLayout>
+
+            <!-- Multi-track timeline -->
+            <com.audiology2.stream.ui.TrackTimelineView
+                android:id="@+id/trackTimelineView"
+                android:layout_width="match_parent"
+                android:layout_height="300dp"
+                android:layout_marginTop="8dp"
+                android:background="@color/srp_bg" />
+
+            <!-- Track controls -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:padding="8dp">
+
+                <Button
+                    android:id="@+id/btnAddTrack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/action_add_track" />
+
+                <Button
+                    android:id="@+id/btnDeleteTrack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/action_delete_track" />
+
+                <Button
+                    android:id="@+id/btnSplitClip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/action_split" />
+
+                <Button
+                    android:id="@+id/btnDuplicateClip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/action_duplicate" />
+
+                <Button
+                    android:id="@+id/btnDeleteClip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/action_delete" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</LinearLayout>
