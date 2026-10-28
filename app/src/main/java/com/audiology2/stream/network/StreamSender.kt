@@ -55,6 +55,8 @@ class StreamSender(
     private val packetsSent = AtomicLong()
     private val bytesSent = AtomicLong()
     private val sendErrors = AtomicLong()
+    /** Inbound bytes read and discarded by the TCP drain thread. */
+    private val drainedBytes = AtomicLong()
     private val reconnects = AtomicLong()
     private val lastError = AtomicReference("")
     private val state = AtomicReference(StreamState.DISCONNECTED)
@@ -153,6 +155,7 @@ class StreamSender(
     private lateinit var udpSocket: DatagramSocket
     private var tcpSocket: Socket? = null
     private var tcpOut: OutputStream? = null
+    private var tcpDrainThread: Thread? = null
 
     private fun connect(addr: InetSocketAddress): Boolean {
         return try {
@@ -165,9 +168,17 @@ class StreamSender(
                     true
                 }
                 TransportType.TCP -> {
-                    tcpSocket = Socket()
-                    tcpSocket!!.connect(addr, 2000)
-                    tcpOut = tcpSocket!!.outputStream
+                    // Low-latency TCP: no Nagle batching (adds up to 40ms per packet).
+                    val socket = Socket().apply {
+                        tcpNoDelay = true
+                        // Keep the send path from deadlocking if the peer writes
+                        // anything back (HTTP errors, control frames) - see drain.
+                        receiveBufferSize = 64 * 1024
+                    }
+                    socket.connect(addr, 2000)
+                    tcpSocket = socket
+                    tcpOut = socket.outputStream
+                    startTcpDrain(socket)
                     true
                 }
             }
@@ -179,6 +190,39 @@ class StreamSender(
             closeSockets()
             false
         }
+    }
+
+    /**
+     * Critical for TCP: the phone's sender never reads from its socket, so any
+     * data the server sends back (HTTP status/error bodies, control responses)
+     * sits un-ACKed and eventually collapses the phone's receive window, which
+     * stalls the *send* path and latency grows without bound. This background
+     * thread reads and discards inbound bytes so the window never fills.
+     */
+    private fun startTcpDrain(socket: Socket) {
+        stopTcpDrain()
+        tcpDrainThread = Thread({
+            try {
+                val input = socket.inputStream ?: return@Thread
+                val buf = ByteArray(4096)
+                while (socket.isConnected && !socket.isClosed) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    // Discard. Total drained bytes are tracked for diagnostics.
+                    drainedBytes.addAndGet(n.toLong())
+                }
+            } catch (_: IOException) {
+                // Socket closed on disconnect: expected.
+            }
+        }, "StreamSender-TcpDrain").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    private fun stopTcpDrain() {
+        runCatching { tcpDrainThread?.interrupt() }
+        tcpDrainThread = null
     }
 
     private fun sendFrame(frame: PacketizedFrame): Boolean {
@@ -206,6 +250,7 @@ class StreamSender(
     }
 
     private fun closeSockets() {
+        stopTcpDrain()
         try { udpSocket.close() } catch (_: Exception) { }
         try { tcpOut?.close() } catch (_: Exception) { }
         try { tcpSocket?.close() } catch (_: Exception) { }
