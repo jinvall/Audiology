@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  App color scheme derived from the project's srp-css-theme-pack tokens:
+    dark purple base (#1a1230 / #0f0a18), green accent (#12f012),
+    violet secondary (#7a2fff), cyan accent (#00d1ff).
+  Mapped onto Material3 token names so the theme is self-consistent.
+-->
+<resources>
+    <!-- Core palette -->
+    <color name="srp_bg">#0f0a18</color>
+    <color name="srp_bg_elev_1">#161028</color>
+    <color name="srp_bg_elev_2">#21163a</color>
+    <color name="srp_surface">#1a1230</color>
+    <color name="srp_surface_2">#231743</color>
+
+    <color name="srp_text">#f3f3f7</color>
+    <color name="srp_text_muted">#c8c9d4</color>
+    <color name="srp_text_subtle">#9698ab</color>
+
+    <color name="srp_primary">#12f012</color>
+    <color name="srp_primary_strong">#1fff5b</color>
+    <color name="srp_primary_contrast">#041105</color>
+
+    <color name="srp_secondary">#7a2fff</color>
+    <color name="srp_accent">#00d1ff</color>
+
+    <color name="srp_border">#3d2d61</color>
+    <color name="srp_border_strong">#5a4191</color>
+
+    <color name="srp_success">#23d160</color>
+    <color name="srp_warning">#ffb020</color>
+    <color name="srp_danger">#ff4d6d</color>
+    <color name="srp_info">#3fa8ff</color>
+
+    <!-- Material3 mapped tokens -->
+    <color name="md_theme_dark_primary">#12f012</color>
+    <color name="md_theme_dark_onPrimary">#041105</color>
+    <color name="md_theme_dark_secondary">#7a2fff</color>
+    <color name="md_theme_dark_onSecondary">#ffffff</color>
+    <color name="md_theme_dark_tertiary">#00d1ff</color>
+    <color name="md_theme_dark_onTertiary">#041105</color>
+    <color name="md_theme_dark_background">#0f0a18</color>
+    <color name="md_theme_dark_surface">#1a1230</color>
+    <color name="md_theme_dark_surfaceVariant">#231743</color>
+    <color name="md_theme_dark_onBackground">#f3f3f7</color>
+    <color name="md_theme_dark_onSurface">#f3f3f7</color>
+    <color name="md_theme_dark_onSurfaceVariant">#c8c9d4</color>
+    <color name="md_theme_dark_outline">#3d2d61</color>
+    <color name="md_theme_dark_error">#ff4d6d</color>
+    <color name="md_theme_dark_onError">#ffffff</color>
+
+    <!-- Meter / status accents -->
+    <color name="meter_peak">#ff4d6d</color>
+    <color name="meter_rms">#12f012</color>
+    <color name="meter_activity">#00d1ff</color>
+    <color name="ic_launcher_background">#0f0a18</color>
+</resources>

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -15,11 +16,14 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.audiology2.stream.R
 import com.audiology2.stream.audio.AudioPlayer
@@ -35,12 +39,13 @@ import com.audiology2.stream.config.Presets
 import com.audiology2.stream.config.SettingsStore
 import com.audiology2.stream.config.TransportType
 import com.audiology2.stream.config.Validators
-import com.audiology2.stream.data.ProjectDatabase
-import com.audiology2.stream.data.ProjectRepository
 import com.audiology2.stream.databinding.ActivityMainBinding
 import com.audiology2.stream.dsp.AudioConfig
 import com.audiology2.stream.dsp.FFTProcessor
 import com.audiology2.stream.dsp.dbDisplay
+import com.audiology2.stream.export.AudioExporter
+import com.audiology2.stream.export.ExportFormat
+import com.audiology2.stream.importing.AudioImporter
 import com.audiology2.stream.network.NetworkStats
 import com.audiology2.stream.network.StreamState
 import com.audiology2.stream.service.ServiceState
@@ -51,6 +56,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import java.io.File
 
 class MainActivity : AppCompatActivity(), StreamService.Callback {
 
@@ -68,7 +74,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private lateinit var audioPlayer: AudioPlayer
     private val undoRedoManager = UndoRedoManager()
     private val snapGrid = SnapGrid(initialTempo = 120.0)
-    private var projectRepository: ProjectRepository? = null
+    private val audioImporter = AudioImporter(this, editorScope)
+    private val audioExporter = AudioExporter(editorScope)
     
     // Recording callback reference for unregistering
     private var recordingCallback: ((FloatArray, Int, Int) -> Unit)? = null
@@ -80,10 +87,6 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         }
         super.onCreate(savedInstanceState)
         SettingsStore.init(applicationContext)
-        
-        // Initialize project repository
-        val db = ProjectDatabase.getInstance(this)
-        projectRepository = ProjectRepository(db)
         
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -248,6 +251,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnZoomFit.setOnClickListener { binding.trackTimelineView.zoomToFit() }
         binding.btnZoomSelection.setOnClickListener { binding.trackTimelineView.zoomToSelection() }
         
+        // Export/Import
+        binding.btnExport.setOnClickListener { showExportDialog() }
+        binding.btnImport.setOnClickListener { showImportDialog() }
+        
         // Snap grid spinner
         binding.spinnerSnapMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -338,8 +345,6 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     private fun loadLastProject() {
         editorScope.launch {
-            val db = ProjectDatabase.getInstance(this@MainActivity)
-            val repo = ProjectRepository(db)
             // Load most recent project
             // For now, use in-memory ProjectManager
             if (ProjectManager.getCurrentProject() == null) {
@@ -604,6 +609,113 @@ private fun addTrack() {
         val ms = ((seconds * 1000) % 1000).toInt()
         return if (mins > 0) String.format("%d:%02d.%03d", mins, secs, ms)
         else String.format("%d.%03d", secs, ms)
+    }
+
+    // ---- Export/Import ----
+    
+    private fun showExportDialog() {
+        val project = ProjectManager.getCurrentProject() ?: return
+        val formats = listOf(
+            ExportFormat.WAV to getString(R.string.export_format_wav),
+            ExportFormat.M4A to getString(R.string.export_format_m4a)
+        )
+        
+        val adapter = ArrayAdapter<String>(this, android.R.layout.select_dialog_item, formats.map { it.second }.toTypedArray())
+        
+        AlertDialog.Builder(this)
+            .setTitle("Export Project")
+            .setAdapter(adapter) { _, which ->
+                val format = formats[which].first
+                val outputDir = getExternalFilesDir(null) ?: filesDir
+                val outputFile = File(outputDir, "${project.name.replace(" ", "_")}_${System.currentTimeMillis()}.${format.extension}")
+                
+                val progressDialog = AlertDialog.Builder(this)
+                    .setTitle("Exporting ${format.extension.uppercase()}...")
+                    .setView(ProgressBar(this, null, android.R.attr.progressBarStyleLarge).apply { isIndeterminate = true })
+                    .setCancelable(false)
+                    .create()
+                
+                progressDialog.show()
+                
+                editorScope.launch {
+                    val exporter = AudioExporter(editorScope)
+                    val success = when (format) {
+                        ExportFormat.WAV -> exporter.exportWav(project, outputFile) { progress ->
+                            runOnUiThread { progressDialog.setMessage("Exporting: ${(progress * 100).toInt()}%") }
+                        }
+                        ExportFormat.M4A -> exporter.exportM4a(project, outputFile) { progress ->
+                            runOnUiThread { progressDialog.setMessage("Exporting: ${(progress * 100).toInt()}%") }
+                        }
+                        else -> false
+                    }
+                    
+                    runOnUiThread {
+                        progressDialog.dismiss()
+                        if (success) {
+                            Toast.makeText(this@MainActivity, "Exported to ${outputFile.name}", Toast.LENGTH_LONG).show()
+                            // Offer to share
+                            val uri = FileProvider.getUriForFile(
+                                this@MainActivity, "${packageName}.fileprovider", outputFile)
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "audio/*"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            }
+                            startActivity(Intent.createChooser(shareIntent, "Share audio"))
+                        } else {
+                            Toast.makeText(this@MainActivity, "Export failed", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun showImportDialog() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "audio/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        importActivityResult.launch(intent)
+    }
+
+    private val importActivityResult = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val clipData = result.data?.clipData
+            val uris = if (clipData != null) {
+                (0 until clipData.itemCount).map { clipData.getItemAt(it).uri }.toList()
+            } else {
+                result.data?.data?.let { listOf(it) }
+            }
+            if (uris == null || uris.isEmpty()) return@registerForActivityResult
+            
+            val project = ProjectManager.getCurrentProject() ?: return@registerForActivityResult
+            val importer = AudioImporter(this, editorScope)
+            
+            val progressDialog = AlertDialog.Builder(this)
+                .setTitle("Importing Audio...")
+                .setView(ProgressBar(this, null, android.R.attr.progressBarStyleLarge).apply { isIndeterminate = true })
+                .setCancelable(false)
+                .create()
+            
+            progressDialog.show()
+            
+            editorScope.launch {
+                val results = importer.importMultipleFiles(project, uris) { current, total ->
+                    runOnUiThread { progressDialog.setMessage("Importing $current/$total") }
+                }
+                
+                runOnUiThread {
+                    progressDialog.dismiss()
+                    binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
+                    binding.trackTimelineView.postInvalidate()
+                    Toast.makeText(this@MainActivity, "Imported ${results.size} file(s)", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     /** Ties each category header to its collapsible content panel. Panels start

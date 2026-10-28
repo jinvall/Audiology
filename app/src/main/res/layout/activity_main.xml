@@ -1196,6 +1196,30 @@
                     android:layout_marginEnd="8dp"
                     android:background="@color/srp_text_muted" />
 
+                <!-- Export/Import -->
+                <ImageButton
+                    android:id="@+id/btnExport"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_export"
+                    android:src="@android:drawable/ic_menu_save" />
+
+                <ImageButton
+                    android:id="@+id/btnImport"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/action_import"
+                    android:src="@android:drawable/ic_menu_upload" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@color/srp_text_muted" />
+
                 <!-- View toggles -->
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchWaveform"

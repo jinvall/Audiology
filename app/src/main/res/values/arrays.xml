@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="transport_options">
+        <item>UDP</item>
+        <item>TCP</item>
+    </string-array>
+
+    <string-array name="input_source_options">
+        <item>DEFAULT</item>
+        <item>VOICE_COMMUNICATION</item>
+        <item>VOICE_CALL</item>
+        <item>CAMCORDER</item>
+        <item>UNPROCESSED</item>
+        <item>VOICE_RECOGNITION</item>
+    </string-array>
+
+    <string-array name="channel_options">
+        <item>Mono</item>
+        <item>Stereo</item>
+    </string-array>
+
+    <string-array name="sample_rate_options">
+        <item>8000</item>
+        <item>11025</item>
+        <item>16000</item>
+        <item>22050</item>
+        <item>32000</item>
+        <item>44100</item>
+        <item>48000</item>
+        <item>64000</item>
+        <item>96000</item>
+    </string-array>
+
+    <string-array name="preset_options">
+        <item>Maximum Sensitivity</item>
+        <item>Low Latency</item>
+        <item>Clean Monitoring</item>
+        <item>Speech Detail</item>
+        <item>Raw / Unprocessed</item>
+        <item>Stable Network</item>
+    </string-array>
+</resources>
