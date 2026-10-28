@@ -43,6 +43,28 @@ class AudioPlayer(
     var onPlaybackEnd: (() -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
+    // Loop region (seconds). Enabled when loopEnd > loopStart > 0.
+    private var loopStartSec = -1.0
+    private var loopEndSec = -1.0
+    var loopEnabled: Boolean = false
+
+    /** Set or clear the loop region. Clear when end <= start or end <= 0. */
+    fun setLoop(startSec: Double, endSec: Double) {
+        if (endSec > startSec && startSec >= 0) {
+            loopStartSec = startSec
+            loopEndSec = endSec
+            loopEnabled = true
+        } else {
+            loopEnabled = false
+        }
+    }
+
+    fun clearLoop() {
+        loopEnabled = false
+        loopStartSec = -1.0
+        loopEndSec = -1.0
+    }
+
     /** Load WAV file for playback. Returns true if successful. */
     fun loadFile(file: File): Boolean {
         stop()
@@ -218,7 +240,19 @@ class AudioPlayer(
                     Thread.sleep(50)
                     continue
                 }
-                
+
+                // Loop: when the playhead passes loopEnd, jump back to loopStart.
+                if (loopEnabled && loopEndSec > loopStartSec) {
+                    val loopEndFrame = (loopEndSec * sampleRate).toLong()
+                    val loopStartFrame = (loopStartSec * sampleRate).toLong().coerceAtLeast(0L)
+                    if (currentPosition.get() >= loopEndFrame) {
+                        seekToFrames(loopStartFrame)
+                        // Reset the stream to the new position.
+                        fis.channel.position(wavDataStart + currentPosition.get() * bytesPerFrame)
+                        continue
+                    }
+                }
+
                 bytesRead = fis.read(buffer)
                 if (bytesRead <= 0) break
                 

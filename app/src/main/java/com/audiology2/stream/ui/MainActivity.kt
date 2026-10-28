@@ -26,6 +26,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
@@ -195,7 +196,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             binding.packetMsEdit, binding.jitterMsEdit, binding.bufferMsEdit,
             binding.hpfHzEdit, binding.lpfHzEdit, binding.notchHzEdit, binding.notchQEdit,
             binding.eqHzEdit, binding.eqGainEdit, binding.eqBwEdit,
-            binding.compThreshEdit, binding.compRatioEdit, binding.compAttackEdit, binding.compReleaseEdit
+            binding.compThreshEdit, binding.compRatioEdit, binding.compAttackEdit, binding.compReleaseEdit,
+            binding.echoDelayEdit, binding.echoFeedbackEdit, binding.echoMixEdit,
+            binding.distDriveEdit, binding.tremoloRateEdit, binding.tremoloDepthEdit
         ).forEach { it.addTextChangedListener(watcher) }
 
         listOf(
@@ -209,6 +212,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             binding.reconnectSwitch, binding.maxSensitivitySwitch, binding.rawBypassSwitch,
             binding.agcSwitch, binding.nsupSwitch, binding.hpfSwitch, binding.lpfSwitch,
             binding.notchSwitch, binding.eqSwitch, binding.compSwitch, binding.limiterSwitch,
+            binding.echoSwitch, binding.distSwitch, binding.tremoloSwitch,
             binding.abSwitch
         ).forEach { sw -> sw.setOnCheckedChangeListener { _, _ -> if (!updatingViews) updateSettingsFromViews() } }
 
@@ -257,6 +261,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         }
         binding.btnZoomFit.setOnClickListener { binding.trackTimelineView.zoomToFit() }
         binding.btnZoomSelection.setOnClickListener { binding.trackTimelineView.zoomToSelection() }
+        
+        // Loop toggle: loops the selected range (or first clip extent when none).
+        binding.btnLoop.setOnClickListener { toggleLoop() }
         
         // Export/Import
         binding.btnExport.setOnClickListener { showExportDialog() }
@@ -663,9 +670,43 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             runProcess(preview = true) {}
         }
         applyBtn.setOnClickListener {
+            val (st, sp, t) = currentValues()
+            if (st == 0.0 && sp == 1.0 && t == 1.0) {
+                Toast.makeText(context, "No change", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val rangeRel = currentClipRelativeRange(clip)
+            if (rangeRel != null) {
+                // Direct range path: no whole-clip processing needed.
+                busy.set(true)
+                applyBtn.isEnabled = false
+                editorScope.launch {
+                    val newClips = clipEditor.applyRangeTransform(clip, rangeRel) { samples, sr, ch ->
+                        com.audiology2.stream.dsp.TimeStretch.transform(samples, ch, st, sp, t)
+                    }
+                    runOnUiThread {
+                        busy.set(false)
+                        applyBtn.isEnabled = true
+                        if (newClips != null) {
+                            val updated = ProjectManager.updateCurrentProject { project ->
+                                val track = project.getTrack(clip.trackId) ?: return@updateCurrentProject project
+                                val remaining = track.clips.filterNot { it.id == clip.id }
+                                project.updateTrack(track.copy(clips = (remaining + newClips).sortedBy { it.startTime }))
+                            }
+                            binding.trackTimelineView.setProject(updated)
+                            binding.trackTimelineView.postInvalidate()
+                            binding.trackTimelineView.clearRangeSelection()
+                            dialog.dismiss()
+                            Toast.makeText(context, "Pitch/speed applied to selection", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Range apply failed", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                return@setOnClickListener
+            }
             runProcess(preview = false) { result ->
-                // Commit: update the clip to reference the processed file.
-                val (st, sp, t) = currentValues()
+                // Commit: whole-clip update.
                 val updated = ProjectManager.updateCurrentProject { project ->
                     val track = project.getTrack(clip.trackId) ?: return@updateCurrentProject project
                     val newClip = clip.copy(
@@ -687,6 +728,18 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         }
 
         dialog.show()
+    }
+
+    /** Intersection of the active timeline range with [clip], in clip-relative seconds. */
+    private fun currentClipRelativeRange(clip: Clip): Pair<Double, Double>? {
+        if (!binding.trackTimelineView.hasRangeSelection) return null
+        val (rs, re) = binding.trackTimelineView.selectedRange
+        val clipStart = clip.startTime
+        val clipEnd = clip.endTime
+        val overlapStart = maxOf(rs, clipStart)
+        val overlapEnd = minOf(re, clipEnd)
+        if (overlapEnd <= overlapStart) return null
+        return (overlapStart - clipStart) to (overlapEnd - clipStart)
     }
 
     // ===== Effects editing =====
@@ -846,7 +899,45 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         }
 
         previewBtn.setOnClickListener { runEffects(true) }
-        applyBtn.setOnClickListener { runEffects(false) }
+        applyBtn.setOnClickListener {
+            val s = buildSettings()
+            if (s.isNoOp) {
+                Toast.makeText(context, "Enable an effect first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val rangeRel = currentClipRelativeRange(clip)
+            if (rangeRel != null) {
+                // Direct range path.
+                busy.set(true)
+                applyBtn.isEnabled = false
+                val sFinal = s
+                editorScope.launch {
+                    val newClips = clipEditor.applyRangeTransform(clip, rangeRel) { samples, sr, ch ->
+                        com.audiology2.stream.dsp.AudioEffects.apply(samples, sr, ch, sFinal)
+                    }
+                    runOnUiThread {
+                        busy.set(false)
+                        applyBtn.isEnabled = true
+                        if (newClips != null) {
+                            val updated = ProjectManager.updateCurrentProject { project ->
+                                val track = project.getTrack(clip.trackId) ?: return@updateCurrentProject project
+                                val remaining = track.clips.filterNot { it.id == clip.id }
+                                project.updateTrack(track.copy(clips = (remaining + newClips).sortedBy { it.startTime }))
+                            }
+                            binding.trackTimelineView.setProject(updated)
+                            binding.trackTimelineView.postInvalidate()
+                            binding.trackTimelineView.clearRangeSelection()
+                            dialog.dismiss()
+                            Toast.makeText(context, "Effects applied to selection", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Range apply failed", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                return@setOnClickListener
+            }
+            runEffects(false)
+        }
         dialog.show()
     }
 
@@ -958,6 +1049,52 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnPlay.setImageResource(android.R.drawable.ic_media_play)
         binding.timelineTimeDisplay.text = "00:00.000 / 00:00.000"
         binding.trackTimelineView.clearPlayhead()
+    }
+
+    /** Toggle loop playback over the selected range (or selected clip). */
+    private var loopActive = false
+    private fun toggleLoop() {
+        if (loopActive) {
+            loopActive = false
+            audioPlayer.clearLoop()
+            binding.trackTimelineView.clearLoopRegion()
+            binding.btnLoop.setColorFilter(null)
+            Toast.makeText(this, "Loop off", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val project = ProjectManager.getCurrentProject() ?: return
+        var start = -1.0
+        var end = -1.0
+
+        if (binding.trackTimelineView.hasRangeSelection) {
+            val (rs, re) = binding.trackTimelineView.selectedRange
+            start = rs
+            end = re
+        } else {
+            currentSelectionClip()?.let { clip ->
+                start = clip.startTime
+                end = clip.endTime
+            } ?: project.tracks.firstOrNull()?.clips?.firstOrNull()?.let { clip ->
+                start = clip.startTime
+                end = clip.endTime
+            }
+        }
+
+        if (start < 0 || end <= start) {
+            Toast.makeText(this, "Select a range or clip to loop", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        loopActive = true
+        audioPlayer.setLoop(start, end)
+        binding.trackTimelineView.setLoopRegion(start, end)
+        binding.btnLoop.setColorFilter(0xFFFFB300.toInt())
+        // Jump into the loop
+        stopPlayback()
+        audioPlayer.seek(start)
+        binding.trackTimelineView.setPlayheadTime(start)
+        Toast.makeText(this, "Looping ${formatTime(start)} - ${formatTime(end)}", Toast.LENGTH_SHORT).show()
     }
 
     private fun rewind() {
@@ -1252,6 +1389,16 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.limiterSwitch.isChecked = s.dsp.limiterEnabled
         binding.abSwitch.isChecked = s.dsp.abBypass || s.capture.rawBypass
 
+        binding.echoSwitch.isChecked = s.dsp.echoEnabled
+        binding.echoDelayEdit.setText(s.dsp.echoDelayMs.toString())
+        binding.echoFeedbackEdit.setText(s.dsp.echoFeedback.toString())
+        binding.echoMixEdit.setText(s.dsp.echoMix.toString())
+        binding.distSwitch.isChecked = s.dsp.distortionEnabled
+        binding.distDriveEdit.setText(s.dsp.distortionDrive.toString())
+        binding.tremoloSwitch.isChecked = s.dsp.tremoloEnabled
+        binding.tremoloRateEdit.setText(s.dsp.tremoloRateHz.toString())
+        binding.tremoloDepthEdit.setText(s.dsp.tremoloDepth.toString())
+
         // Preset spinner must be set last and silently.
         val pi = Presets.BUILT_IN.indexOfFirst { it.name == s.activePreset }
         if (pi >= 0) {
@@ -1303,7 +1450,16 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 compRatio = (v.compRatioEdit.text.toString().toDoubleOrNull() ?: 4.0),
                 compAttackMs = (v.compAttackEdit.text.toString().toDoubleOrNull() ?: 5.0),
                 compReleaseMs = (v.compReleaseEdit.text.toString().toDoubleOrNull() ?: 50.0),
-                limiterEnabled = v.limiterSwitch.isChecked
+                limiterEnabled = v.limiterSwitch.isChecked,
+                echoEnabled = v.echoSwitch.isChecked,
+                echoDelayMs = (v.echoDelayEdit.text.toString().toDoubleOrNull() ?: 320.0),
+                echoFeedback = (v.echoFeedbackEdit.text.toString().toDoubleOrNull() ?: 0.35),
+                echoMix = (v.echoMixEdit.text.toString().toDoubleOrNull() ?: 0.25),
+                distortionEnabled = v.distSwitch.isChecked,
+                distortionDrive = (v.distDriveEdit.text.toString().toDoubleOrNull() ?: 10.0),
+                tremoloEnabled = v.tremoloSwitch.isChecked,
+                tremoloRateHz = (v.tremoloRateEdit.text.toString().toDoubleOrNull() ?: 5.0),
+                tremoloDepth = (v.tremoloDepthEdit.text.toString().toDoubleOrNull() ?: 0.6)
             ),
             activePreset = v.presetSpinner.selectedItem?.toString().orEmpty()
         )

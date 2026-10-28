@@ -62,6 +62,24 @@ class TrackTimelineView @JvmOverloads constructor(
         style = Paint.Style.FILL
         color = 0x6600D4AA.toInt()
     }
+    private val paintRange = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0x3D7A2FFF.toInt()
+    }
+    private val paintRangeBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f
+        color = 0xFF9A6AFF.toInt()
+    }
+    private val paintLoop = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0x33FFB300.toInt()
+    }
+    private val paintLoopBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f
+        color = 0xFFFFB300.toInt()
+    }
     private val paintPlayhead = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2f
@@ -88,6 +106,15 @@ class TrackTimelineView @JvmOverloads constructor(
     // Selection
     private var selectedClipId: String? = null
     private var selectedTrackId: String? = null
+
+    // Time-range selection (drag on empty track space)
+    private var selectionRangeStart = -1.0
+    private var selectionRangeEnd = -1.0
+    private var isSelectingRange = false
+
+    // Loop region
+    private var loopRegionStart = -1.0
+    private var loopRegionEnd = -1.0
 
     // Drag state
     private var isDragging = false
@@ -117,6 +144,7 @@ class TrackTimelineView @JvmOverloads constructor(
     private val gestureDetector = GestureDetector(context, GestureListener())
     private var lastTouchX = 0f
     private var lastTouchY = 0f
+    private var activePointers = 0
 
     init {
         setLayerType(LAYER_TYPE_HARDWARE, null)
@@ -153,6 +181,42 @@ class TrackTimelineView @JvmOverloads constructor(
 
     /** Get currently selected track ID */
     val currentSelectedTrackId: String? get() = selectedTrackId
+
+    /** Selected time range in seconds (start, end). Both -1 when no range. */
+    val selectedRange: Pair<Double, Double>
+        get() = if (selectionRangeStart >= 0 && selectionRangeEnd > selectionRangeStart) {
+            selectionRangeStart to selectionRangeEnd
+        } else {
+            -1.0 to -1.0
+        }
+
+    val hasRangeSelection: Boolean
+        get() = selectionRangeStart >= 0 && selectionRangeEnd > selectionRangeStart
+
+    /** Clear the current time-range selection. */
+    fun clearRangeSelection() {
+        selectionRangeStart = -1.0
+        selectionRangeEnd = -1.0
+        isSelectingRange = false
+        postInvalidate()
+    }
+
+    /** Set the loop region (seconds). Passing end <= start clears it. */
+    fun setLoopRegion(startSec: Double, endSec: Double) {
+        if (endSec > startSec && startSec >= 0) {
+            loopRegionStart = startSec
+            loopRegionEnd = endSec
+        } else {
+            clearLoopRegion()
+        }
+        postInvalidate()
+    }
+
+    fun clearLoopRegion() {
+        loopRegionStart = -1.0
+        loopRegionEnd = -1.0
+        postInvalidate()
+    }
 
     /** Find clip by ID */
     fun findClip(clipId: String): Clip? {
@@ -265,6 +329,28 @@ class TrackTimelineView @JvmOverloads constructor(
             val playheadX = timeToPx(playheadTime)
             if (playheadX >= trackHeaderWidth && playheadX <= width) {
                 canvas.drawLine(playheadX, 0f, playheadX, project!!.tracks.size * trackHeight, paintPlayhead)
+            }
+        }
+
+        // Draw time-range selection overlay
+        if (selectionRangeStart >= 0 && selectionRangeEnd > selectionRangeStart) {
+            val left = timeToPx(selectionRangeStart).coerceAtLeast(trackHeaderWidth)
+            val right = timeToPx(selectionRangeEnd).coerceAtMost(width)
+            if (right > left) {
+                val rect = RectF(left, 0f, right, project!!.tracks.size * trackHeight)
+                canvas.drawRect(rect, paintRange)
+                canvas.drawRect(rect, paintRangeBorder)
+            }
+        }
+
+        // Draw loop region (above selection, saturated ruler band)
+        if (loopRegionStart >= 0 && loopRegionEnd > loopRegionStart) {
+            val left = timeToPx(loopRegionStart).coerceAtLeast(trackHeaderWidth)
+            val right = timeToPx(loopRegionEnd).coerceAtMost(width)
+            if (right > left) {
+                val rect = RectF(left, 0f, right, project!!.tracks.size * trackHeight)
+                canvas.drawRect(rect, paintLoop)
+                canvas.drawRect(rect, paintLoopBorder)
             }
         }
 
@@ -521,6 +607,7 @@ class TrackTimelineView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                activePointers = 1
                 lastTouchX = event.x
                 lastTouchY = event.y
                 
@@ -542,6 +629,7 @@ class TrackTimelineView @JvmOverloads constructor(
                         val track = proj.tracks[trackIndex]
                         selectedTrackId = track.id
                         selectedClipId = null
+                        clearRangeSelection()
                         postInvalidate()
                         onTrackSelect?.invoke(track)
                     }
@@ -587,14 +675,32 @@ class TrackTimelineView @JvmOverloads constructor(
                         onClipSelect?.invoke(clip)
                         return true
                     } else {
-                        // Clicked empty space - deselect
+                        // Empty space: deselect clip and start time-range selection.
                         selectedClipId = null
                         selectedTrackId = track.id
+                        selectionRangeStart = time
+                        selectionRangeEnd = time
+                        isSelectingRange = true
                         postInvalidate()
                         onEmptySelect?.invoke(time, track)
                         return true
                     }
                 }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // Second finger down: cancel any range selection, allow pan/zoom
+                activePointers++
+                if (isSelectingRange) {
+                    isSelectingRange = false
+                    selectionRangeStart = -1.0
+                    selectionRangeEnd = -1.0
+                    postInvalidate()
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                activePointers = (activePointers - 1).coerceAtLeast(0)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -606,7 +712,23 @@ class TrackTimelineView @JvmOverloads constructor(
                     scaleX = newScale
                     postInvalidate()
                     return true
-                 } else if (isDragging && dragClipId != null && dragTrackId != null) {
+                } else if (activePointers >= 2) {
+                    // Two-finger pan
+                    val dx = event.x - lastTouchX
+                    val dy = event.y - lastTouchY
+                    translateX += dx
+                    translateY += dy
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                    postInvalidate()
+                    return true
+                } else if (isSelectingRange) {
+                    val time = pxToTime(event.x).coerceAtLeast(0.0)
+                    selectionRangeEnd = time
+                    postInvalidate()
+                    onRangeChanging?.invoke(selectionRangeStart, selectionRangeEnd)
+                    return true
+                } else if (isDragging && dragClipId != null && dragTrackId != null) {
                     // Drag clip
                     val newX = event.x - dragOffsetX
                     val rawTime = pxToTime(newX).coerceAtLeast(0.0)
@@ -669,6 +791,28 @@ class TrackTimelineView @JvmOverloads constructor(
                 dragTrackId = null
                 resizeClipId = null
                 resizeTrackId = null
+                activePointers = 0
+
+                // Finalize time-range selection
+                if (isSelectingRange) {
+                    isSelectingRange = false
+                    var start = applySnap(selectionRangeStart.coerceAtLeast(0.0))
+                    var end = applySnap(selectionRangeEnd.coerceAtLeast(0.0))
+                    if (start > end) {
+                        val tmp = start
+                        start = end
+                        end = tmp
+                    }
+                    if (end - start < 0.01) {
+                        // Tap: clear range selection
+                        selectionRangeStart = -1.0
+                        selectionRangeEnd = -1.0
+                    } else {
+                        selectionRangeStart = start
+                        selectionRangeEnd = end
+                        onRangeSelected?.invoke(start, end)
+                    }
+                }
                 postInvalidate()
                 return true
             }
@@ -682,7 +826,9 @@ class TrackTimelineView @JvmOverloads constructor(
     var onClipSelect: ((Clip) -> Unit)? = null
     var onEmptySelect: ((Double, Track) -> Unit)? = null
     var onClipMove: ((Clip) -> Unit)? = null
-     var onClipChanged: ((Clip) -> Unit)? = null
+    var onClipChanged: ((Clip) -> Unit)? = null
+    var onRangeChanging: ((Double, Double) -> Unit)? = null
+    var onRangeSelected: ((Double, Double) -> Unit)? = null
 
     inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean = true

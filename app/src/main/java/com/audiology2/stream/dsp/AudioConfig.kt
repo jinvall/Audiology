@@ -36,7 +36,17 @@ data class AudioConfig(
     val makeUpGainDb: Double = 0.0,
     val limiterEnabled: Boolean = false,
     val limiterCeiling: Double = 1.0,
-    val limiterReleaseMs: Double = 25.0
+    val limiterReleaseMs: Double = 25.0,
+    /** Real-time insert effects (live monitoring/recording path). */
+    val echoEnabled: Boolean = false,
+    val echoDelayMs: Double = 320.0,
+    val echoFeedback: Double = 0.35,
+    val echoMix: Double = 0.25,
+    val distortionEnabled: Boolean = false,
+    val distortionDrive: Double = 10.0,
+    val tremoloEnabled: Boolean = false,
+    val tremoloRateHz: Double = 5.0,
+    val tremoloDepth: Double = 0.6
 ) {
     companion object {
         val DEFAULT = AudioConfig()

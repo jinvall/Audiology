@@ -92,6 +92,88 @@ class ClipEditor(private val context: Context) {
         EditResult(out, buf.frames.toDouble() / buf.sampleRate)
     }
 
+    /**
+     * Apply a transform to only a sub-range of a clip (clip-relative seconds)
+     * and produce the replacement clips (head, processed middle, tail).
+     * Empty head/tail are omitted. Returns null when the range is invalid or
+     * the source cannot be read.
+     */
+    suspend fun applyRangeTransform(
+        clip: Clip,
+        rangeRel: Pair<Double, Double>,
+        transform: (FloatArray, Int, Int) -> FloatArray
+    ): List<Clip>? = withContext(Dispatchers.IO) {
+        val rStart = rangeRel.first.coerceIn(0.0, clip.duration)
+        val rEnd = rangeRel.second.coerceIn(0.0, clip.duration)
+        if (rEnd <= rStart + 0.001) return@withContext null // degenerate
+
+        val src = readClipAudio(clip) ?: return@withContext null
+        if (src.frames == 0) return@withContext null
+
+        val sr = src.sampleRate
+        val ch = src.channels
+        val headFrames = (rStart * sr).toInt().coerceIn(0, src.frames)
+        val midFrames = ((rEnd - rStart) * sr).toInt().coerceIn(1, src.frames - headFrames)
+        val tailFrames = (src.frames - headFrames - midFrames).coerceAtLeast(0)
+
+        // Extract the middle section and process it.
+        val midSamples = FloatArray(midFrames * ch)
+        System.arraycopy(src.samples, headFrames * ch, midSamples, 0, midSamples.size)
+        val processed = transform(midSamples, sr, ch)
+        val processedFrames = (processed.size / ch).coerceAtLeast(1)
+
+        // Paths for output files.
+        fun outFile(tag: String): File {
+            val name = clip.name.lowercase().replace(Regex("[^a-z0-9]+"), "_")
+            return File(editDir, "${name}_${tag}_${UUID.randomUUID().toString().take(8)}.wav")
+        }
+
+        val result = mutableListOf<Clip>()
+        val baseStart = clip.startTime
+
+        // Head: untouched region before the range.
+        if (headFrames > 0) {
+            result.add(
+                clip.with(
+                    id = UUID.randomUUID().toString(),
+                    name = "${clip.name} (H)",
+                    sourceOffset = clip.sourceOffset,
+                    duration = headFrames.toDouble() / sr,
+                    startTime = baseStart
+                ).copy(gain = clip.gain)
+            )
+        }
+
+        // Processed middle.
+        val midBuf = AudioBuffer(processed, sr, ch, processedFrames)
+        val midFile = outFile("m")
+        if (!WavUtils.write(midFile, midBuf)) return@withContext null
+        result.add(
+            clip.with(
+                id = UUID.randomUUID().toString(),
+                name = clip.name,
+                sourcePath = midFile.absolutePath,
+                sourceOffset = 0.0,
+                duration = processedFrames.toDouble() / sr,
+                startTime = baseStart + rStart
+            ).copy(gain = clip.gain)
+        )
+
+        // Tail: untouched region after the range (shifted by duration change).
+        if (tailFrames > 0) {
+            result.add(
+                clip.with(
+                    id = UUID.randomUUID().toString(),
+                    name = "${clip.name} (T)",
+                    sourceOffset = clip.sourceOffset + rEnd,
+                    duration = tailFrames.toDouble() / sr,
+                    startTime = baseStart + rStart + processedFrames.toDouble() / sr
+                ).copy(gain = clip.gain)
+            )
+        }
+        result
+    }
+
     /** Delete a previously generated preview/temp file, if it is inside our edit dir. */
     fun deleteGenerated(file: File) {
         val base = editDir.canonicalPath

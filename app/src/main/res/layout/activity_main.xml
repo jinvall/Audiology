@@ -734,6 +734,133 @@
                 android:text="@string/label_limiter"
                 android:textColor="@color/srp_text" />
 
+            <!-- Live insert effects (echo / distortion / tremolo) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/echoSwitch"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Echo"
+                    android:textColor="@color/srp_text" />
+
+                <EditText
+                    android:id="@+id/echoDelayEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="Delay"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <EditText
+                    android:id="@+id/echoFeedbackEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="Fdbk"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <EditText
+                    android:id="@+id/echoMixEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="Mix"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/distSwitch"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Drive"
+                    android:textColor="@color/srp_text" />
+
+                <EditText
+                    android:id="@+id/distDriveEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="3"
+                    android:layout_marginStart="6dp"
+                    android:hint="Drive (0-30)"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/tremoloSwitch"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Tremolo"
+                    android:textColor="@color/srp_text" />
+
+                <EditText
+                    android:id="@+id/tremoloRateEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:layout_marginStart="6dp"
+                    android:hint="Rate Hz"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+
+                <EditText
+                    android:id="@+id/tremoloDepthEdit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:layout_marginStart="6dp"
+                    android:hint="Depth"
+                    android:inputType="numberDecimal|textNoSuggestions"
+                    android:padding="8dp"
+                    android:background="@drawable/input_bg"
+                    android:textColor="@color/srp_text"
+                    android:textColorHint="@color/srp_text_subtle" />
+            </LinearLayout>
+
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/abSwitch"
                 android:layout_width="match_parent"
@@ -1099,6 +1226,15 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/desc_fast_forward"
                     android:src="@android:drawable/ic_media_ff" />
+
+                <ImageButton
+                    android:id="@+id/btnLoop"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Toggle loop"
+                    android:src="@drawable/ic_loop" />
 
                 <ImageButton
                     android:id="@+id/btnRecord"
