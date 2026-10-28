@@ -71,3 +71,5 @@ app/src/main/java/com/audiology2/stream/databinding/
 
 # Keystore (don't commit release keystore)
 # audiology2-release.keystore
+# User-moved recordings / artifacts
+recording_*.wav
