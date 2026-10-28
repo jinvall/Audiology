@@ -43,7 +43,8 @@
 ## 5. Environment facts (verified)
 
 - Box = Intel N100, 4 cores, 16GB, `silver` @ 10.0.0.147. Always loaded (VS Code, 2× Chrome, 2 stream apps, RTSP, Inkscape ×2 typical).
-- **AMP server** (`~/amp/server/amp.py`) = AudioReceiver on **TCP/UDP 8090** (app stream target, default port), control 8091, web/viz 8093. It IS the hardened host.
+- **AMP server** (`~/amp/server/amp.py`) = one receiver/host: AudioReceiver on **TCP/UDP 8090** (app stream target, default port), control 8091, web/viz 8093. Confirmed live: `pcm_clients:1`, `android_connected:true`, monitoring enabled. This is ONE host.
+- **`~/audioscope` is a SEPARATE, active project** (own git repo, "Audio Microscope"): continuous acoustic monitoring / event detection / source separation / playback / evidence recording, Python 3.10+, consumes a **network audio stream** (or mic). It can be the *consuming* host for the app's stream and is NOT the same as `~/amp`. Do not conflate the two; when the user says "the audio makes a full loop" they may mean the phone → AMP → (audioscope consumes AMP's stream). Check `~/audioscope/README.md`/`TODO.md` before assuming which host matters for a given task. `~/amp` and `~/audioscope` are sibling projects, not aliases.
 - **Ollama** installed with `phi3` (2.2GB) + `llama3` (4.7GB) pulled. Unusable as assistant default on this HW (measured). Unload with `ollama stop <model>`.
 - No adb device attached to this box — user side-loads the debug APK (`app/build/outputs/apk/debug/`).
 - `recording_*.wav` is gitignored (user artifacts).

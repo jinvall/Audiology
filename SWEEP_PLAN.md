@@ -12,7 +12,8 @@
 3. Order: go card-by-card TOP OF SCREEN → BOTTOM. Do not jump around.
 
 ## Card 1 — Connections
-- [ ] Host/port fields: enter host `10.0.0.147`, port `8090` → Start. Confirm AMP `AudioReceiver` shows the connection (server side: `ss -tn | grep 8090`).
+- [ ] Host/port fields: enter host `10.0.0.147`, port `8090` → Start. Confirm a receiver shows the connection. **Two sibling hosts exist — identify which one is listening:** `~/amp` (AudioReceiver, `ss -tn | grep 8090`, `/health` shows `pcm_clients`/`android_connected`) vs `~/audioscope` (separate project, may consume the stream). Note which host the phone lands on.
+- [ ] **Audio loop:** user reports the audio makes a full loop with live monitoring. Verify: phone → receiver → monitor graph active. If audioscope is the consumer, confirm it sees/records the stream (its own tools), else it's AMP.
 - [ ] Wire format: does Connections expose a working **PCM format selector**? (Currently hardcoded PCM_16 in code — flag if the spinner is cosmetic.)
 - [ ] Sample rate change: SR 44100 ↔ 48000 — does DSP + WSOLA timing survive? Measure latency floor (capture 20ms + packet 30ms expected).
 - [ ] Transport UDP ↔ TCP toggle: switch mid-stream — clean reconnect? `drainedBytes` not shown in Diagnostics (flag), Send-Q on server should stay ~0 with new build.
