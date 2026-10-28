@@ -15,9 +15,13 @@ import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -56,6 +60,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlin.math.roundToInt
 import java.io.File
 
 class MainActivity : AppCompatActivity(), StreamService.Callback {
@@ -76,6 +81,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private val snapGrid = SnapGrid(initialTempo = 120.0)
     private val audioImporter = AudioImporter(this, editorScope)
     private val audioExporter = AudioExporter(editorScope)
+    private val clipEditor = ClipEditor(this)
+    private val sampleMaker = SampleMaker(this)
     
     // Recording callback reference for unregistering
     private var recordingCallback: ((FloatArray, Int, Int) -> Unit)? = null
@@ -404,6 +411,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnSplitClip.setOnClickListener { splitClip() }
         binding.btnDuplicateClip.setOnClickListener { duplicateClip() }
         binding.btnDeleteClip.setOnClickListener { deleteClip() }
+        binding.btnPitchSpeed.setOnClickListener { showPitchSpeedDialog() }
+        binding.btnEffects.setOnClickListener { showEffectsDialog() }
+        binding.btnMakeSample.setOnClickListener { makeSampleFromSelection() }
         
         binding.btnZoomFit.setOnClickListener { binding.trackTimelineView.zoomToFit() }
         binding.btnZoomSelection.setOnClickListener { binding.trackTimelineView.zoomToSelection() }
@@ -511,6 +521,401 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.trackTimelineView.setProject(updated)
         binding.trackTimelineView.postInvalidate()
         Log.d("Editor", "Deleted clip: $clipId")
+    }
+
+    // ===== Pitch / Speed editing =====
+
+    private fun currentSelectionClip(): Clip? {
+        val clipId = binding.trackTimelineView.currentSelectedClipId
+        return clipId?.let { binding.trackTimelineView.findClip(it) }
+    }
+
+    private fun requireSelectedClip(action: String): Clip? {
+        val clip = currentSelectionClip()
+        if (clip == null) {
+            Toast.makeText(this, "Select a clip to $action", Toast.LENGTH_SHORT).show()
+        }
+        return clip
+    }
+
+    private fun showPitchSpeedDialog() {
+        val clip = requireSelectedClip("edit pitch/speed") ?: return
+        val context = this
+
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 16, 24, 8)
+        }
+
+        // Semitones slider: -12..+12 semitones
+        val semiLabel = TextView(context).apply { text = "Pitch: ${clip.pitchSemitones} st" }
+        val semiBar = SeekBar(context).apply {
+            max = 240
+            progress = ((clip.pitchSemitones + 12) * 10).toInt()
+        }
+        // Speed slider: 50..200 %
+        val speedLabel = TextView(context).apply { text = "Speed: ${(clip.speedRatio * 100).toInt()}%" }
+        val speedBar = SeekBar(context).apply {
+            max = 150
+            progress = ((clip.speedRatio * 100).toInt() - 50)
+        }
+        // Stretch slider: 50..200 % (duration only)
+        val stretchLabel = TextView(context).apply { text = "Tempo/Stretch: ${(clip.stretchRatio * 100).toInt()}%" }
+        val stretchBar = SeekBar(context).apply {
+            max = 150
+            progress = ((clip.stretchRatio * 100).toInt() - 50)
+        }
+
+        fun currentValues(): Triple<Double, Double, Double> {
+            val st = (semiBar.progress - 120) / 10.0
+            val sp = (speedBar.progress + 50) / 100.0
+            val t = (stretchBar.progress + 50) / 100.0
+            return Triple(st, sp, t)
+        }
+
+        semiBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                val (st, _, _) = currentValues()
+                semiLabel.text = "Pitch: ${String.format("%+.1f", st)} st"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+        speedBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                val (_, sp, _) = currentValues()
+                speedLabel.text = "Speed: ${(sp * 100).toInt()}%"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+        stretchBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                val (_, _, t) = currentValues()
+                stretchLabel.text = "Tempo/Stretch: ${(t * 100).toInt()}%"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+
+        root.addView(semiLabel)
+        root.addView(semiBar)
+        root.addView(speedLabel)
+        root.addView(speedBar)
+        root.addView(stretchLabel)
+        root.addView(stretchBar)
+
+        val dialog = AlertDialog.Builder(context, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Pitch / Speed — ${clip.name}")
+            .setView(root)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        val previewBtn = Button(context).apply { text = "Preview" }
+        val applyBtn = Button(context).apply { text = "Apply to Clip" }
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            previewBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            applyBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            addView(previewBtn)
+            addView(applyBtn)
+        }
+        root.addView(row)
+
+        // Busy flag so preview and apply do not collide.
+        val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        fun runProcess(preview: Boolean, done: (com.audiology2.stream.ui.EditResult) -> Unit) {
+            if (busy.get()) return
+            val (st, sp, t) = currentValues()
+            if (st == 0.0 && sp == 1.0 && t == 1.0) {
+                Toast.makeText(context, "No change", Toast.LENGTH_SHORT).show()
+                return
+            }
+            busy.set(true)
+            previewBtn.isEnabled = false
+            applyBtn.isEnabled = false
+            editorScope.launch {
+                val result = clipEditor.applyPitchSpeed(clip, st, sp, t, preview = preview)
+                runOnUiThread {
+                    busy.set(false)
+                    previewBtn.isEnabled = true
+                    applyBtn.isEnabled = true
+                    if (result != null) {
+                        if (preview) {
+                            stopPlayback()
+                            audioPlayer.loadFile(result.outputFile)
+                            audioPlayer.seek(0.0)
+                            audioPlayer.play()
+                            binding.btnPlay.setImageResource(android.R.drawable.ic_media_pause)
+                            Toast.makeText(context, "Previewing processed audio", Toast.LENGTH_SHORT).show()
+                        } else {
+                            done(result)
+                        }
+                    } else {
+                        Toast.makeText(context, "Process failed (readable WAV source required)", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+
+        previewBtn.setOnClickListener {
+            runProcess(preview = true) {}
+        }
+        applyBtn.setOnClickListener {
+            runProcess(preview = false) { result ->
+                // Commit: update the clip to reference the processed file.
+                val (st, sp, t) = currentValues()
+                val updated = ProjectManager.updateCurrentProject { project ->
+                    val track = project.getTrack(clip.trackId) ?: return@updateCurrentProject project
+                    val newClip = clip.copy(
+                        sourcePath = result.outputFile.absolutePath,
+                        sourceOffset = 0.0,
+                        duration = result.finalDurationSec,
+                        pitchSemitones = st,
+                        speedRatio = sp,
+                        stretchRatio = t,
+                        startTime = clip.startTime
+                    )
+                    project.updateTrack(track.updateClip(newClip))
+                }
+                binding.trackTimelineView.setProject(updated)
+                binding.trackTimelineView.postInvalidate()
+                dialog.dismiss()
+                Toast.makeText(context, "Pitch/speed applied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        dialog.show()
+    }
+
+    // ===== Effects editing =====
+
+    private fun showEffectsDialog() {
+        val clip = requireSelectedClip("apply effects") ?: return
+        val context = this
+        val settings = com.audiology2.stream.dsp.EffectSettings.DEFAULT.copy()
+
+        val root = android.widget.ScrollView(context)
+        val inner = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 16, 24, 8)
+        }
+        root.addView(inner)
+
+        fun row(label: String, valueText: (Int) -> String, max: Int, def: Int): Pair<SeekBar, () -> Int> {
+            val lbl = TextView(context).apply { text = "$label: ${valueText(def)}" }
+            val bar = SeekBar(context).apply { this.max = max; progress = def }
+            inner.addView(lbl)
+            inner.addView(bar)
+            bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                    lbl.text = "$label: ${valueText(p)}"
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {}
+            })
+            return bar to { bar.progress }
+        }
+
+        // Filter section
+        val hpCb = CheckBox(context).apply { text = "High-pass"; setPadding(0, 12, 0, 0) }
+        inner.addView(hpCb)
+        val (hpBar, hpVal) = row("High-pass freq", { "${it * 20 + 20} Hz" }, 200, (settings.highPassHz / 20) - 1)
+        val lpCb = CheckBox(context).apply { text = "Low-pass" }
+        inner.addView(lpCb)
+        val (lpBar, lpVal) = row("Low-pass freq", { "${it * 100 + 100} Hz" }, 390, (settings.lowPassHz / 100) - 1)
+
+        val nCb = CheckBox(context).apply { text = "Notch filter" }
+        inner.addView(nCb)
+        val (nBar, nVal) = row("Notch freq", { "${it * 2 + 20} Hz" }, 340, (settings.notchHz.toInt() / 2) - 10)
+
+        val eqCb = CheckBox(context).apply { text = "EQ (peaking)" }
+        inner.addView(eqCb)
+        val (eqBar, eqVal) = row("EQ gain", { "${it - 24} dB" }, 48, 24)
+
+        // Dynamics section
+        val compCb = CheckBox(context).apply { text = "Compressor" }
+        inner.addView(compCb)
+        val (threshBar, threshVal) = row("Threshold", { "${it * -2} dB" }, 30, 12)
+        val (ratioBar, ratioVal) = row("Ratio", { "1:${it.toDouble() / 5.0}" }, 50, 20)
+
+        val limCb = CheckBox(context).apply { text = "Limiter" }
+        inner.addView(limCb)
+
+        // Space section
+        val echoCb = CheckBox(context).apply { text = "Echo" }
+        inner.addView(echoCb)
+        val (echoBar, echoVal) = row("Echo delay", { "${it * 20 + 20} ms" }, 240, 15)
+        val (echoMixBar, echoMixVal) = row("Echo mix", { "${it}%" }, 100, 25)
+
+        val distCb = CheckBox(context).apply { text = "Distortion" }
+        inner.addView(distCb)
+        val (driveBar, driveVal) = row("Drive", { "${it}%" }, 100, 20)
+
+        val triCb = CheckBox(context).apply { text = "Tremolo" }
+        inner.addView(triCb)
+        val (triRateBar, triRateVal) = row("Rate", { "${(it + 1) * 0.5} Hz" }, 59, 9)
+
+        val dialog = AlertDialog.Builder(context, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Effects — ${clip.name}")
+            .setView(root)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        val previewBtn = Button(context).apply { text = "Preview" }
+        val applyBtn = Button(context).apply { text = "Apply to Clip" }
+        val rowButtons = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            previewBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            applyBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            addView(previewBtn)
+            addView(applyBtn)
+        }
+        inner.addView(rowButtons)
+
+        fun buildSettings(): com.audiology2.stream.dsp.EffectSettings = settings.copy(
+            highPassEnabled = hpCb.isChecked,
+            highPassHz = hpVal() * 20 + 20,
+            lowPassEnabled = lpCb.isChecked,
+            lowPassHz = lpVal() * 100 + 100,
+            notchEnabled = nCb.isChecked,
+            notchHz = (nVal() * 2 + 20).toDouble(),
+            eqEnabled = eqCb.isChecked,
+            eqGainDb = (eqVal() - 24).toDouble(),
+            compressorEnabled = compCb.isChecked,
+            thresholdDb = (threshVal() * -2).toDouble(),
+            ratio = ratioVal().toDouble() / 5.0,
+            limiterEnabled = limCb.isChecked,
+            echoEnabled = echoCb.isChecked,
+            echoDelayMs = (echoVal() * 20 + 20).toDouble(),
+            echoMix = echoMixVal().toDouble() / 100.0,
+            distortionEnabled = distCb.isChecked,
+            distortionDrive = driveVal().toDouble(),
+            tremoloEnabled = triCb.isChecked,
+            tremoloRateHz = (triRateVal() + 1) * 0.5
+        )
+
+        val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        fun runEffects(preview: Boolean) {
+            if (busy.get()) return
+            val s = buildSettings()
+            if (s.isNoOp) {
+                Toast.makeText(context, "Enable an effect first", Toast.LENGTH_SHORT).show()
+                return
+            }
+            busy.set(true)
+            previewBtn.isEnabled = false
+            applyBtn.isEnabled = false
+            editorScope.launch {
+                val result = clipEditor.applyEffects(clip, s, preview = preview)
+                busy.set(false)
+                previewBtn.isEnabled = true
+                applyBtn.isEnabled = true
+                if (result != null) {
+                    if (preview) {
+                        runOnUiThread {
+                            stopPlayback()
+                            audioPlayer.loadFile(result.outputFile)
+                            audioPlayer.seek(0.0)
+                            audioPlayer.play()
+                            binding.btnPlay.setImageResource(android.R.drawable.ic_media_pause)
+                        }
+                    } else {
+                        val updated = ProjectManager.updateCurrentProject { project ->
+                            val track = project.getTrack(clip.trackId) ?: return@updateCurrentProject project
+                            val newClip = clip.copy(
+                                sourcePath = result.outputFile.absolutePath,
+                                sourceOffset = 0.0,
+                                duration = result.finalDurationSec
+                            )
+                            project.updateTrack(track.updateClip(newClip))
+                        }
+                        runOnUiThread {
+                            binding.trackTimelineView.setProject(updated)
+                            binding.trackTimelineView.postInvalidate()
+                            dialog.dismiss()
+                            Toast.makeText(context, "Effects applied", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    runOnUiThread { Toast.makeText(context, "Effects failed", Toast.LENGTH_SHORT).show() }
+                }
+            }
+        }
+
+        previewBtn.setOnClickListener { runEffects(true) }
+        applyBtn.setOnClickListener { runEffects(false) }
+        dialog.show()
+    }
+
+    // ===== Record → beat sample =====
+
+    private fun makeSampleFromSelection() {
+        val clip = requireSelectedClip("make a sample") ?: return
+        val project = ProjectManager.getCurrentProject() ?: return
+
+        val threshold = -48.0 // dBFS gate default
+        val dialog = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Make Beat Sample — ${clip.name}")
+            .setMessage("Trim silence, normalize, snap loop length to project tempo, and place on the Beats track.")
+            .setPositiveButton("Create", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                editorScope.launch {
+                    val beatSec = 60.0 / project.tempo.coerceIn(40.0, 300.0)
+                    val sampleResult = sampleMaker.makeSample(
+                        clip = clip,
+                        project = project,
+                        thresholdDb = threshold,
+                        normalize = true,
+                        snapToBeat = true
+                    )
+                    if (sampleResult == null) {
+                        runOnUiThread { Toast.makeText(this@MainActivity, "Sample creation failed", Toast.LENGTH_LONG).show() }
+                        return@launch
+                    }
+
+                    val updated = ProjectManager.updateCurrentProject { p ->
+                        // Ensure a Beats track exists.
+                        var beatsTrack = p.tracks.firstOrNull { it.name.equals("Beats", ignoreCase = true) }
+                        var work = p
+                        if (beatsTrack == null) {
+                            work = p.addTrack(name = "Beats", color = 0xFFFFD700.toInt())
+                            beatsTrack = work.tracks.last()
+                        }
+                        val sampleClip = Clip(
+                            name = "${clip.name} (sample)",
+                            sourcePath = sampleResult.sampleFile.absolutePath,
+                            duration = sampleResult.durationSec,
+                            startTime = sampleResult.placedAt,
+                            trackId = beatsTrack!!.id,
+                            color = 0xFFFFD700.toInt()
+                        )
+                        work.updateTrack(beatsTrack.insertClip(sampleClip, sampleResult.placedAt))
+                    }
+
+                    runOnUiThread {
+                        binding.trackTimelineView.setProject(updated)
+                        binding.trackTimelineView.postInvalidate()
+                        val loopNote = if (sampleResult.loopLengthSec > 0) {
+                            " (loops ${String.format("%.2f", sampleResult.loopLengthSec)}s = ${(beatSec / sampleResult.loopLengthSec * 4).roundToInt()} beats)"
+                        } else ""
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Sample added to Beats track${if (loopNote.isBlank()) "" else ""}. ${sampleResult.durationSec.roundToInt()}s$loopNote",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        dialog.dismiss()
+                    }
+                }
+            }
+        }
+        dialog.show()
     }
 
     // Editor state

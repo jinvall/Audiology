@@ -1283,8 +1283,13 @@
                 android:background="@color/srp_bg" />
 
             <!-- Track controls -->
-            <LinearLayout
+            <HorizontalScrollView
                 android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center"
@@ -1295,6 +1300,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
                     android:text="@string/action_add_track" />
 
                 <Button
@@ -1302,6 +1310,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
                     android:text="@string/action_delete_track" />
 
                 <Button
@@ -1309,6 +1320,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
                     android:text="@string/action_split" />
 
                 <Button
@@ -1316,14 +1330,51 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
                     android:text="@string/action_duplicate" />
 
                 <Button
                     android:id="@+id/btnDeleteClip"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
                     android:text="@string/action_delete" />
+
+                <Button
+                    android:id="@+id/btnPitchSpeed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
+                    android:text="Pitch/Speed" />
+
+                <Button
+                    android:id="@+id/btnEffects"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
+                    android:text="FX" />
+
+                <Button
+                    android:id="@+id/btnMakeSample"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
+                    android:text="Make Sample" />
             </LinearLayout>
+            </HorizontalScrollView>
 
         </LinearLayout>
 
