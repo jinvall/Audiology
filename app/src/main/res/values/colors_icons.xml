@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto-generated icon colors from srp-icons.css
+  DO NOT EDIT MANUALLY - Regenerate with extract-icon-colors.js
+-->
+<resources>
+    <!-- Core Icon Colors -->
+    <color name="icon_color_on_surface">#E6E0E9</color>
+    <color name="icon_color_on_surface_variant">#CAC4D0</color>
+    <color name="icon_color_primary">#00D4AA</color>
+    <color name="icon_color_primary_container">#004D3A</color>
+    <color name="icon_color_on_primary">#FFFFFF</color>
+    <color name="icon_color_secondary">#65637E</color>
+    <color name="icon_color_on_secondary">#FFFFFF</color>
+
+    <!-- Semantic Icon Colors -->
+    <color name="icon_color_success">#23D160</color>
+    <color name="icon_color_warning">#FFB020</color>
+    <color name="icon_color_danger">#FF4D6D</color>
+    <color name="icon_color_info">#3FA8FF</color>
+    <color name="icon_color_warning_bg">#FFF3E0</color>
+
+    <!-- Special Purpose -->
+    <color name="icon_color_gold">#FFD700</color>
+    <color name="icon_color_arm">#FF4D6D</color>
+    <color name="icon_color_record">#FF4D6D</color>
+    <color name="icon_color_play">#00D4AA</color>
+    <color name="icon_color_pause">#FFB020</color>
+
+    <!-- Clip Handle Colors -->
+    <color name="icon_color_drag_handle">#CAC4D0</color>
+    <color name="icon_color_resize_handle">#00D4AA</color>
+    <color name="icon_color_fade_handle">#00D4AA</color>
+    <color name="icon_color_gain_point">#00D4AA</color>
+
+    <!-- Track Header Colors -->
+    <color name="icon_color_mute">#CAC4D0</color>
+    <color name="icon_color_solo">#FFD700</color>
+    <color name="icon_color_monitor">#00D4AA</color>
+    <color name="icon_color_lock">#CAC4D0</color>
+
+    <!-- State Indicator Colors -->
+    <color name="icon_color_playing">#00D4AA</color>
+    <color name="icon_color_recording">#FF4D6D</color>
+    <color name="icon_color_paused">#FFB020</color>
+    <color name="icon_color_clipping">#FF4D6D</color>
+    <color name="icon_color_muted">#CAC4D0</color>
+    <color name="icon_color_solo_active">#FFD700</color>
+
+    <!-- Transport Controls -->
+    <color name="icon_color_transport_play">#00D4AA</color>
+    <color name="icon_color_transport_pause">#FFB020</color>
+    <color name="icon_color_transport_stop">#FF4D6D</color>
+    <color name="icon_color_transport_record">#FF4D6D</color>
+    <color name="icon_color_transport_rewind">#E6E0E9</color>
+    <color name="icon_color_transport_fast_forward">#E6E0E9</color>
+    <color name="icon_color_transport_loop">#E6E0E9</color>
+    <color name="icon_color_transport_shuffle">#E6E0E9</color>
+
+    <!-- View Toggles -->
+    <color name="icon_color_view_waveform">#E6E0E9</color>
+    <color name="icon_color_view_spectrogram">#E6E0E9</color>
+    <color name="icon_color_view_split">#E6E0E9</color>
+    <color name="icon_color_view_fullscreen">#E6E0E9</color>
+
+    <!-- Zoom & Navigation -->
+    <color name="icon_color_zoom_fit">#E6E0E9</color>
+    <color name="icon_color_zoom_selection">#E6E0E9</color>
+    <color name="icon_color_zoom_in">#E6E0E9</color>
+    <color name="icon_color_zoom_out">#E6E0E9</color>
+    <color name="icon_color_pan">#E6E0E9</color>
+
+    <!-- Snap Grid -->
+    <color name="icon_color_snap_off">#CAC4D0</color>
+    <color name="icon_color_snap_seconds">#E6E0E9</color>
+    <color name="icon_color_snap_frames">#E6E0E9</color>
+    <color name="icon_color_snap_beats">#00D4AA</color>
+    <color name="icon_color_snap_measures">#65637E</color>
+    <color name="icon_color_snap_8th">#00D4AA</color>
+    <color name="icon_color_snap_16th">#00D4AA</color>
+    <color name="icon_color_snap_triplet">#65637E</color>
+
+    <!-- Track Controls -->
+    <color name="icon_color_track_add">#00D4AA</color>
+    <color name="icon_color_track_delete">#FF4D6D</color>
+    <color name="icon_color_track_up">#E6E0E9</color>
+    <color name="icon_color_track_down">#E6E0E9</color>
+    <color name="icon_color_track_color">#00D4AA</color>
+
+    <!-- Clip Editing -->
+    <color name="icon_color_clip_split">#00D4AA</color>
+    <color name="icon_color_clip_duplicate">#00D4AA</color>
+    <color name="icon_color_clip_delete">#FF4D6D</color>
+    <color name="icon_color_clip_trim">#E6E0E9</color>
+    <color name="icon_color_clip_fade_in">#00D4AA</color>
+    <color name="icon_color_clip_fade_out">#00D4AA</color>
+    <color name="icon_color_clip_gain_envelope">#00D4AA</color>
+
+    <!-- Undo/Redo -->
+    <color name="icon_color_undo">#E6E0E9</color>
+    <color name="icon_color_redo">#E6E0E9</color>
+
+    <!-- Track Header Buttons -->
+    <color name="icon_color_track_mute">#CAC4D0</color>
+    <color name="icon_color_track_solo">#FFD700</color>
+    <color name="icon_color_track_arm">#FF4D6D</color>
+    <color name="icon_color_track_monitor">#00D4AA</color>
+    <color name="icon_color_track_lock">#CAC4D0</color>
+    <color name="icon_color_track_menu">#E6E0E9</color>
+
+    <!-- Clip Handles -->
+    <color name="icon_color_clip_drag">#CAC4D0</color>
+    <color name="icon_color_clip_resize_left">#00D4AA</color>
+    <color name="icon_color_clip_resize_right">#00D4AA</color>
+    <color name="icon_color_clip_fade_handle">#00D4AA</color>
+    <color name="icon_color_clip_gain_point">#00D4AA</color>
+
+    <!-- Menu Items -->
+    <color name="icon_color_menu_new">#E6E0E9</color>
+    <color name="icon_color_menu_open">#E6E0E9</color>
+    <color name="icon_color_menu_save">#00D4AA</color>
+    <color name="icon_color_menu_save_as">#00D4AA</color>
+    <color name="icon_color_menu_import">#00D4AA</color>
+    <color name="icon_color_menu_export">#00D4AA</color>
+    <color name="icon_color_menu_export_mixdown">#00D4AA</color>
+    <color name="icon_color_menu_settings">#E6E0E9</color>
+    <color name="icon_color_menu_preferences">#E6E0E9</color>
+    <color name="icon_color_menu_help">#3FA8FF</color>
+    <color name="icon_color_menu_about">#3FA8FF</color>
+
+    <!-- Dialog/Confirmation -->
+    <color name="icon_color_dialog_check">#23D160</color>
+    <color name="icon_color_dialog_close">#E6E0E9</color>
+    <color name="icon_color_dialog_warning">#FFB020</color>
+    <color name="icon_color_dialog_error">#FF4D6D</color>
+    <color name="icon_color_dialog_info">#3FA8FF</color>
+
+    <!-- State Indicators -->
+    <color name="icon_color_state_playing">#00D4AA</color>
+    <color name="icon_color_state_recording">#FF4D6D</color>
+    <color name="icon_color_state_paused">#FFB020</color>
+    <color name="icon_color_state_clipping">#FF4D6D</color>
+    <color name="icon_color_state_muted">#CAC4D0</color>
+    <color name="icon_color_state_solo_active">#FFD700</color>
+
+    <!-- Hover States -->
+    <color name="icon_color_hover_primary">#1FFF5B</color>
+    <color name="icon_color_hover_secondary">#E6E0E9</color>
+    <color name="icon_color_hover_danger">#FF4D6D</color>
+    <color name="icon_color_hover_gold">#FFEB3B</color>
+
+    <!-- Active States -->
+    <color name="icon_color_active_primary">#00D4AA</color>
+    <color name="icon_color_active_danger">#FF4D6D</color>
+
+    <!-- Disabled States -->
+    <color name="icon_color_disabled">#CAC4D0</color>
+</resources>

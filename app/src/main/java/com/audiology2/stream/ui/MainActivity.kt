@@ -220,7 +220,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     }
 
     private fun initEditor() {
-        // Initialize waveform view with live capture data (placeholder for now)
+        // Initialize waveform view with live capture data
         binding.mainWaveformView.setTrackColor(0xFF00D4AA.toInt())
         
         // Spectrogram view - use SRP spectral gradient
@@ -344,36 +344,40 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     }
 
     private fun loadLastProject() {
-        editorScope.launch {
-            // Load most recent project
-            // For now, use in-memory ProjectManager
-            if (ProjectManager.getCurrentProject() == null) {
-                ProjectManager.createNewProject("Session")
-            }
-        }
+        // Project loading/creation is handled by initTrackTimeline().
+        // Keeping the hook here so future "most recently used project" logic has a place.
     }
 
     private fun initTrackTimeline() {
-        // Create a new project if none exists
-        if (ProjectManager.getCurrentProject() == null) {
-            ProjectManager.createNewProject("Session")
+        // Ensure DataStore state is loaded, then create a default project if none exists
+        editorScope.launch {
+            ProjectManager.load()
+            if (ProjectManager.getCurrentProject() == null) {
+                ProjectManager.createNewProject("Session")
+            }
+            val project = ProjectManager.getCurrentProject() ?: return@launch
+
+            // Ensure at least one track exists
+            if (project.tracks.isEmpty()) {
+                ProjectManager.updateCurrentProject { it.addTrack(name = "Track 1", color = 0xFF00D4AA.toInt()) }
+            }
+
+            setupTimeline(ProjectManager.getCurrentProject())
         }
-        val project = ProjectManager.getCurrentProject()!!
-        
-        // Ensure at least one track exists
-        if (project.tracks.isEmpty()) {
-            val track = Track(name = "Track 1", color = 0xFF00D4AA.toInt())
-            project.tracks.add(track)
-        }
-        
+    }
+
+    private fun setupTimeline(project: AudioProject?) {
         binding.trackTimelineView.setProject(project)
         binding.trackTimelineView.setSampleRate(
             binding.sampleRateEdit.text.toString().toIntOrNull() ?: 48000
         )
-        
+
         // Wire up timeline callbacks
         binding.trackTimelineView.onSeekRequest = { time ->
-            // Seek playback
+            stopPlayback()
+            audioPlayer.seek(time)
+            binding.trackTimelineView.setPlayheadTime(time)
+            binding.timelineTimeDisplay.text = formatTime(time) + " / " + formatTime(audioPlayer.getDurationSec())
         }
         binding.trackTimelineView.onTrackSelect = { track ->
             Log.d("Editor", "Selected track: ${track.name}")
@@ -384,11 +388,14 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.trackTimelineView.onEmptySelect = { time, track ->
             Log.d("Editor", "Empty select at ${time}s on ${track.name}")
         }
-        binding.trackTimelineView.onClipMove = { clip ->
-            Log.d("Editor", "Moved clip: ${clip.name} to ${clip.startTime}s")
-        }
-        binding.trackTimelineView.onClipResize = { clip ->
-            Log.d("Editor", "Resized clip: ${clip.name} duration=${clip.duration}s")
+        binding.trackTimelineView.onClipChanged = { updatedClip ->
+            // Persist the in-place drag/resize change back into the current project
+            val trackId = updatedClip.trackId
+            ProjectManager.updateCurrentProject { p ->
+                p.updateTrackClips(trackId, p.getTrack(trackId)?.clips?.map { if (it.id == updatedClip.id) updatedClip else it } ?: p.getTrack(trackId)?.clips ?: emptyList())
+            }
+            binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
+            binding.trackTimelineView.postInvalidate()
         }
 
         // Track timeline controls
@@ -403,7 +410,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     }
 
     // Track timeline actions
-private fun addTrack() {
+    private fun addTrack() {
         val project = ProjectManager.getCurrentProject() ?: return
         val trackNum = project.tracks.size + 1
         val colors = intArrayOf(
@@ -411,11 +418,10 @@ private fun addTrack() {
             0xFFFFE66D.toInt(), 0xFF95E1D3.toInt(), 0xFFDDA0DD.toInt()
         )
         val color = colors[(trackNum - 1) % colors.size]
-        val track = Track(name = "Track $trackNum", color = color)
-        project.tracks.add(track)
-        binding.trackTimelineView.setProject(project)
+        val updated = ProjectManager.updateCurrentProject { it.addTrack(name = "Track $trackNum", color = color) }
+        binding.trackTimelineView.setProject(updated)
         binding.trackTimelineView.postInvalidate()
-        Log.d("Editor", "Added track: ${track.name}")
+        Log.d("Editor", "Added track: Track $trackNum")
     }
 
     private fun deleteTrack() {
@@ -426,8 +432,8 @@ private fun addTrack() {
         }
         val trackId = binding.trackTimelineView.currentSelectedTrackId
         if (trackId != null) {
-            project.removeTrack(trackId)
-            binding.trackTimelineView.setProject(project)
+            val updated = ProjectManager.updateCurrentProject { it.removeTrack(trackId) }
+            binding.trackTimelineView.setProject(updated)
             binding.trackTimelineView.postInvalidate()
             Log.d("Editor", "Deleted track: $trackId")
         }
@@ -446,7 +452,9 @@ private fun addTrack() {
         val track = project.getTrack(trackId) ?: return
         
         // Split at playhead position if available, otherwise at clip middle
-        val splitTime = if (binding.trackTimelineView.currentPlayheadTime > 0) {
+        val splitTime = if (binding.trackTimelineView.currentPlayheadTime > 0
+            && binding.trackTimelineView.currentPlayheadTime > clip.startTime
+            && binding.trackTimelineView.currentPlayheadTime < clip.endTime) {
             binding.trackTimelineView.currentPlayheadTime - clip.startTime
         } else {
             clip.duration / 2
@@ -454,11 +462,11 @@ private fun addTrack() {
         
         val result = clip.splitAt(splitTime)
         result?.let { (left, right) ->
-            track.removeClip(clipId)
-            track.clips.add(left)
-            track.clips.add(right)
-            track.clips.sortBy { it.startTime }
-            binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
+            val newClips = track.clips.filterNot { it.id == clipId }.toMutableList().apply {
+                add(left); add(right)
+            }.sortedBy { it.startTime }
+            val updated = ProjectManager.updateCurrentProject { it.updateTrackClips(trackId, newClips) }
+            binding.trackTimelineView.setProject(updated)
             binding.trackTimelineView.postInvalidate()
             Log.d("Editor", "Split clip at ${splitTime}s")
         }
@@ -481,8 +489,9 @@ private fun addTrack() {
             name = "${clip.name} (copy)",
             startTime = clip.endTime
         )
-        track.appendClip(duplicate)
-        binding.trackTimelineView.setProject(project)
+        val updatedTrack = track.appendClip(duplicate)
+        val updated = ProjectManager.updateCurrentProject { it.updateTrack(updatedTrack) }
+        binding.trackTimelineView.setProject(updated)
         binding.trackTimelineView.postInvalidate()
         Log.d("Editor", "Duplicated clip: ${clip.name}")
     }
@@ -497,8 +506,9 @@ private fun addTrack() {
         }
         
         val track = project.getTrack(trackId) ?: return
-        track.removeClip(clipId)
-        binding.trackTimelineView.setProject(project)
+        val updatedTrack = track.removeClip(clipId)
+        val updated = ProjectManager.updateCurrentProject { it.updateTrack(updatedTrack) }
+        binding.trackTimelineView.setProject(updated)
         binding.trackTimelineView.postInvalidate()
         Log.d("Editor", "Deleted clip: $clipId")
     }
@@ -587,18 +597,21 @@ private fun addTrack() {
         if (filePath != null) {
             // Create a clip from the recorded file and add to project
             val duration = service!!.getRecordingDurationMs() / 1000.0
-            val track = ProjectManager.getCurrentProject()?.tracks?.firstOrNull()
-            track?.let { t ->
+            val updated = ProjectManager.updateCurrentProject { p ->
+                val track = p.tracks.firstOrNull()
+                    ?: p.addTrack(name = "Track 1", color = 0xFF00D4AA.toInt()).tracks.first()
                 val clip = Clip(
                     sourcePath = filePath,
                     duration = duration,
-                    startTime = t.duration,
-                    trackId = t.id,
+                    startTime = track.duration,
+                    trackId = track.id,
                     color = 0xFF00D4AA.toInt()
                 )
-                t.appendClip(clip)
-                Log.d("Editor", "Added clip: ${clip.name} (${clip.duration}s) at ${clip.startTime}s")
+                val updatedTrack = track.appendClip(clip)
+                p.updateTrack(updatedTrack)
             }
+            binding.trackTimelineView.setProject(updated)
+            binding.trackTimelineView.postInvalidate()
         }
         Log.d("Editor", "Stopped recording: $filePath")
     }
@@ -704,15 +717,16 @@ private fun addTrack() {
             progressDialog.show()
             
             editorScope.launch {
-                val results = importer.importMultipleFiles(project, uris) { current, total ->
+                val (updatedProject, clips) = importer.importMultipleFiles(project, uris) { current, total ->
                     runOnUiThread { progressDialog.setMessage("Importing $current/$total") }
                 }
                 
+                ProjectManager.setCurrentProject(updatedProject)
                 runOnUiThread {
                     progressDialog.dismiss()
                     binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
                     binding.trackTimelineView.postInvalidate()
-                    Toast.makeText(this@MainActivity, "Imported ${results.size} file(s)", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "Imported ${clips.size} file(s)", Toast.LENGTH_LONG).show()
                 }
             }
         }

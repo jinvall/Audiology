@@ -317,11 +317,11 @@ class ProjectRepository(private val db: ProjectDatabase) {
         val trackEntities = trackDao.getByProject(id)
         val tracks = mutableListOf<Track>()
         trackEntities.forEach { trackEntity ->
-            val track = trackEntity.toTrack()
+            var track = trackEntity.toTrack()
             // Load clips for this track
             val clipEntities = clipDao.getByTrack(trackEntity.id)
             clipEntities.forEach { clipEntity ->
-                track.clips.add(clipEntity.toClip())
+                track = track.copy(clips = track.clips + clipEntity.toClip())
             }
             tracks.add(track)
         }

@@ -31,14 +31,14 @@ class AudioImporter(
         private const val TAG = "AudioImporter"
     }
 
-    /** Import audio file from URI and create a new track with clip */
+    /** Import audio file from URI and create a new clip on a track.
+     *  Returns the updated project plus the created track and clip. */
     suspend fun importAudioFile(
         project: AudioProject,
         uri: Uri,
         targetTrackId: String? = null,
         onProgress: ((Double) -> Unit)? = null
-    ): Pair<Track, Clip>? = withContext(Dispatchers.IO) {
-        var result: Pair<Track, Clip>? = null
+    ): Triple<AudioProject, Track, Clip>? = withContext(Dispatchers.IO) {
         try {
             val contentResolver = context.contentResolver
             val inputStream = contentResolver.openInputStream(uri)
@@ -111,7 +111,7 @@ class AudioImporter(
                     }
                 }
                 
-                onProgress?.invoke(0.5) // Placeholder
+                onProgress?.invoke(1.0) // Decode loop complete
             }
             
             wavWriter.close()
@@ -119,22 +119,32 @@ class AudioImporter(
             decoder.release()
             extractor.release()
             
-            // Create track and clip
-            val track = targetTrackId?.let { project.getTrack(it) } 
-                ?: project.tracks.firstOrNull() 
-                ?: Track(name = "Imported").also { project.tracks.add(it) }
-            
+            // Create track and clip (immutable project flow)
+            var workingTrack = targetTrackId?.let { project.getTrack(it) }
+            var workingProject = project
+            if (workingTrack == null) {
+                val firstTrack = project.tracks.firstOrNull()
+                if (firstTrack != null) {
+                    workingTrack = firstTrack
+                } else {
+                    val added = workingProject.addTrack(name = "Imported", color = 0xFF4ECDC4.toInt())
+                    workingProject = added
+                    workingTrack = added.tracks.last()
+                }
+            }
+
             val clip = Clip(
                 sourcePath = tempFile.absolutePath,
                 duration = framesDecoded.toDouble() / sampleRate,
-                startTime = track.duration,
-                trackId = track.id,
+                startTime = workingTrack!!.duration,
+                trackId = workingTrack.id,
                 color = 0xFF4ECDC4.toInt()
             )
-            track.appendClip(clip)
-            
+            val updatedTrack = workingTrack.appendClip(clip)
+            workingProject = workingProject.updateTrack(updatedTrack)
+
             Log.i(TAG, "Imported audio: ${clip.duration}s, ${sampleRate}Hz, ${channels}ch")
-            Pair(track, clip)
+            Triple(workingProject, updatedTrack, clip)
         } catch (e: Exception) {
             Log.e(TAG, "Import failed", e)
             null
@@ -159,20 +169,23 @@ class AudioImporter(
         return result
     }
 
-    /** Import multiple files */
+    /** Import multiple files; returns the final updated project and all created clips. */
     suspend fun importMultipleFiles(
         project: AudioProject,
         uris: List<Uri>,
         onProgress: ((Int, Int) -> Unit)? = null
-    ): List<Pair<Track, Clip>> = withContext(Dispatchers.IO) {
-        val results = mutableListOf<Pair<Track, Clip>>()
+    ): Pair<AudioProject, List<Clip>> = withContext(Dispatchers.IO) {
+        var workingProject = project
+        val results = mutableListOf<Clip>()
         for ((index, uri) in uris.withIndex()) {
-            onProgress?.invoke(index, uris.size)
-            val result = importAudioFile(project, uri, null) { progress ->
-                // Could update per-file progress
+            val result = importAudioFile(workingProject, uri, null) { progress ->
+                onProgress?.invoke(index, uris.size)
             }
-            result?.let { results.add(it) }
+            result?.let { (updatedProject, _, clip) ->
+                workingProject = updatedProject
+                results.add(clip)
+            }
         }
-        results
+        workingProject to results
     }
 }

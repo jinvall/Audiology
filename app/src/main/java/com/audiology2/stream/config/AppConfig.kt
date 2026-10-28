@@ -33,7 +33,7 @@ enum class ChannelMode { MONO, STEREO }
 data class NetworkConfig(
     val host: String = "",
     val port: Int = 59090,
-    val transport: TransportType = TransportType.UDP,
+    val transport: TransportType = TransportType.TCP,
     val sampleRate: Int = 48000,
     val channelMode: ChannelMode = ChannelMode.MONO,
     val pcmFormat: PcmFormat = PcmFormat.PCM_16,

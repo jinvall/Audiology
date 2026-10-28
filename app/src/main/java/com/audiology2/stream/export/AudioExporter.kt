@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.PI
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -254,19 +256,86 @@ class TrackMixer(
 
 /** Plays a single track's clips */
 class TrackPlayer(
-    track: Track,
-    sampleRate: Int
+    private val track: Track,
+    private val sampleRate: Int
 ) {
     private val clips = track.clips.sortedBy { it.startTime }
     private var currentClipIndex = 0
     private var clipFrameOffset = 0L
+    private var currentFrame = 0L
     
     val hasAudio: Boolean = clips.any { it.duration > 0 }
     
     fun readFrames(buffer: FloatArray, maxFrames: Int): Int {
-        // Simplified - in real implementation, would decode audio files
-        // For now, return 0 (silence) as placeholder
-        return 0
+        if (currentClipIndex >= clips.size) return 0
+        
+        val clip = clips[currentClipIndex]
+        val clipStartFrame = (clip.startTime * sampleRate).toLong()
+        val clipEndFrame = (clip.endTime * sampleRate).toLong()
+        val currentGlobalFrame = currentFrame
+        
+        // Check if we're before this clip
+        if (currentGlobalFrame < clipStartFrame) {
+            val framesUntilClip = (clipStartFrame - currentGlobalFrame).toInt()
+            val numFrames = min(maxFrames, framesUntilClip)
+            currentFrame += numFrames
+            return 0 // Return silence before clip starts
+        }
+        
+        // Check if we're in this clip
+        if (currentGlobalFrame < clipEndFrame) {
+            val framesRemainingInClip = (clipEndFrame - currentGlobalFrame).toInt()
+            val numFrames = min(maxFrames, framesRemainingInClip)
+            
+            // In a real implementation, we would decode the actual audio file here
+            // For now, generate a simple test tone based on the clip position
+            val clipRelativeFrame = (currentGlobalFrame - clipStartFrame).toInt()
+            
+            for (i in 0 until numFrames) {
+                val framePos = clipRelativeFrame + i
+                val positionInClip = framePos.toDouble() / (clipEndFrame - clipStartFrame)
+                
+                // Generate test tone: 440Hz sine wave for the first track, 880Hz for the second, etc.
+                // In a real app, this would decode actual audio files
+                val trackNumber = currentClipIndex % 4
+                val frequency = 440.0 * (trackNumber + 1)
+                val time = framePos.toDouble() / sampleRate
+                
+                val sampleValue = sin(2.0 * PI * frequency * time) * 0.3
+                
+                // Apply fade in/out
+                val fadeFactor = when {
+                    positionInClip < (clip.fadeIn / clip.duration) -> 
+                        positionInClip / (clip.fadeIn / clip.duration)
+                    positionInClip > (1.0 - clip.fadeOut / clip.duration) -> 
+                        (1.0 - positionInClip) / (clip.fadeOut / clip.duration)
+                    else -> 1.0
+                }
+                
+                // Apply track gain and clip gain
+                val gainFactor = track.gain * clip.gain * fadeFactor.toFloat()
+                
+                // Apply pan (simple stereo panning)
+                val leftGain = if (track.pan <= 0) gainFactor else gainFactor * (1.0f - track.pan)
+                val rightGain = if (track.pan >= 0) gainFactor else gainFactor * (1.0f + track.pan)
+                
+                // Apply clip pan
+                val finalLeftGain = leftGain * if (clip.pan <= 0) 1.0f else (1.0f - clip.pan)
+                val finalRightGain = rightGain * if (clip.pan >= 0) 1.0f else (1.0f + clip.pan)
+                
+                val bufferIndex = i * 2
+                buffer[bufferIndex] += (sampleValue * finalLeftGain).toFloat()
+                buffer[bufferIndex + 1] += (sampleValue * finalRightGain).toFloat()
+            }
+            
+            currentFrame += numFrames
+            return numFrames
+        }
+        
+        // Move to next clip
+        currentClipIndex++
+        clipFrameOffset = 0
+        return readFrames(buffer, maxFrames)
     }
 }
 

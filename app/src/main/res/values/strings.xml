@@ -77,7 +77,6 @@
     <string name="label_waveform">Waveform</string>
     <string name="action_zoom_fit">Zoom Fit</string>
     <string name="action_zoom_sel">Zoom Selection</string>
-    <string name="label_tracks_placeholder">Multi-track timeline coming soon...</string>
     <string name="action_add_track">Add Track</string>
     <string name="action_delete_track">Delete Track</string>
     <string name="action_split">Split</string>

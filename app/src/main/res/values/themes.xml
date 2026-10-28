@@ -1,18 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Audiology2" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/md_theme_dark_primary</item>
-        <item name="colorOnPrimary">@color/md_theme_dark_onPrimary</item>
-        <item name="colorSecondary">@color/md_theme_dark_secondary</item>
-        <item name="colorOnSecondary">@color/md_theme_dark_onSecondary</item>
-        <item name="colorTertiary">@color/md_theme_dark_tertiary</item>
+        <item name="colorPrimary">@color/icon_color_primary</item>
+        <item name="colorOnPrimary">@color/icon_color_on_primary</item>
+        <item name="colorPrimaryContainer">@color/icon_color_primary_container</item>
+        <item name="colorSecondary">@color/icon_color_secondary</item>
+        <item name="colorOnSecondary">@color/icon_color_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/icon_color_primary_container</item>
+        <item name="colorTertiary">@color/icon_color_gold</item>
+        <item name="colorOnTertiary">@color/icon_color_on_secondary</item>
+        <item name="colorError">@color/icon_color_danger</item>
+        <item name="colorErrorContainer">#93000A</item>
         <item name="android:windowBackground">@color/srp_bg</item>
         <item name="android:textColorPrimary">@color/srp_text</item>
         <item name="android:textColorSecondary">@color/srp_text_muted</item>
-        <item name="colorOnBackground">@color/md_theme_dark_onBackground</item>
-        <item name="colorOnSurface">@color/md_theme_dark_onSurface</item>
-        <item name="colorSurface">@color/md_theme_dark_surface</item>
-        <item name="colorOutline">@color/md_theme_dark_outline</item>
+        <item name="colorOnBackground">@color/srp_text</item>
+        <item name="colorOnSurface">@color/icon_color_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/icon_color_on_surface_variant</item>
+        <item name="colorSurface">@color/srp_surface</item>
+        <item name="colorSurfaceVariant">@color/srp_surface_2</item>
+        <item name="colorOutline">@color/srp_border</item>
         <item name="android:statusBarColor">?attr/colorSurface</item>
         <item name="android:navigationBarColor">?attr/colorSurface</item>
         <item name="android:forceDarkAllowed">false</item>

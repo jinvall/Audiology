@@ -82,6 +82,9 @@ class TrackTimelineView @JvmOverloads constructor(
     private var translateY = 0f
     private var trackHeight = 80f
 
+    // Snap grid reference (null => no snapping)
+    private var snapGrid: SnapGrid? = null
+
     // Selection
     private var selectedClipId: String? = null
     private var selectedTrackId: String? = null
@@ -189,8 +192,14 @@ class TrackTimelineView @JvmOverloads constructor(
 
     /** Set snap grid for editing operations */
     fun setSnapGrid(grid: SnapGrid) {
-        // Store reference to snap grid for use in drag/resize operations
-        // For now just store it - the grid is used during drag operations
+        snapGrid = grid
+        postInvalidate()
+    }
+
+    /** Apply the active snap grid to a time position (identity when grid is null). */
+    private fun applySnap(time: Double): Double {
+        val grid = snapGrid ?: return time
+        return grid.snap(time)
     }
 
     /** Find track by ID */
@@ -597,43 +606,49 @@ class TrackTimelineView @JvmOverloads constructor(
                     scaleX = newScale
                     postInvalidate()
                     return true
-                } else if (isDragging && dragClipId != null && dragTrackId != null) {
+                 } else if (isDragging && dragClipId != null && dragTrackId != null) {
                     // Drag clip
                     val newX = event.x - dragOffsetX
-                    val newTime = pxToTime(newX).coerceAtLeast(0.0)
+                    val rawTime = pxToTime(newX).coerceAtLeast(0.0)
                     val clip = findClip(dragClipId!!) ?: return true
-                    val track = findTrack(dragTrackId!!) ?: return true
                     
                     val maxTime = project?.duration ?: 0.0
-                    val clippedTime = newTime.coerceAtMost(maxTime - clip.duration)
+                    val clippedTime = applySnap(rawTime).coerceAtLeast(0.0).coerceAtMost(maxTime - clip.duration)
                     
-                    clip.startTime = clippedTime
+                    // Create updated clip with new start time and call callback
+                    val updatedClip = clip.copy(startTime = clippedTime)
                     postInvalidate()
-                    onClipMove?.invoke(clip)
+                    onClipChanged?.invoke(updatedClip)
                     return true
-                } else if (isResizing && resizeClipId != null && resizeTrackId != null) {
+                 } else if (isResizing && resizeClipId != null && resizeTrackId != null) {
                     // Resize clip
                     val newX = event.x
-                    val newTime = pxToTime(newX).coerceAtLeast(0.0)
+                    val rawTime = pxToTime(newX).coerceAtLeast(0.0)
+                    val snapTime = applySnap(rawTime)
                     val clip = findClip(resizeClipId!!) ?: return true
-                    val track = findTrack(resizeTrackId!!) ?: return true
                     
-                    if (resizeLeft) {
-                        val newDuration = clip.endTime - newTime
+                    val updatedClip = if (resizeLeft) {
+                        val newDuration = clip.endTime - snapTime
                         if (newDuration > 0.01) {
-                            clip.sourceOffset += (clip.startTime - newTime)
-                            clip.startTime = newTime
-                            clip.duration = newDuration
+                            val newSourceOffset = clip.sourceOffset + (clip.startTime - snapTime)
+                            clip.copy(sourceOffset = newSourceOffset, startTime = snapTime, duration = newDuration)
+                        } else {
+                            clip
                         }
                     } else {
-                        val newDuration = newTime - clip.startTime
+                        val newDuration = snapTime - clip.startTime
                         if (newDuration > 0.01) {
                             val maxDuration = (project?.duration ?: 0.0) - clip.startTime
-                            clip.duration = newDuration.coerceAtMost(maxDuration)
+                            clip.copy(duration = newDuration.coerceAtMost(maxDuration))
+                        } else {
+                            clip
                         }
                     }
+                    
                     postInvalidate()
-                    onClipResize?.invoke(clip)
+                    if (updatedClip != clip) {
+                        onClipChanged?.invoke(updatedClip)
+                    }
                     return true
                 } else {
                     // Pan
@@ -667,7 +682,7 @@ class TrackTimelineView @JvmOverloads constructor(
     var onClipSelect: ((Clip) -> Unit)? = null
     var onEmptySelect: ((Double, Track) -> Unit)? = null
     var onClipMove: ((Clip) -> Unit)? = null
-    var onClipResize: ((Clip) -> Unit)? = null
+     var onClipChanged: ((Clip) -> Unit)? = null
 
     inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean = true

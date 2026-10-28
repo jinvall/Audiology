@@ -110,19 +110,24 @@ class StreamSender(
             // Connected: drain the queue.
             Log.i("StreamSender", "Connected, starting to drain queue")
             updateState(StreamState.STREAMING, "")
-            drainQueueWithTicks()
+            val hadError = drainQueueWithTicks()
+            // If drainQueueWithTicks returned due to an error, apply backoff before reconnecting
+            if (hadError && !stop) {
+                Log.w("StreamSender", "drainQueueWithTicks returned with error, applying backoff")
+                backoff()
+            }
         }
         Log.i("StreamSender", "run: sender loop ended")
     }
 
-    private fun drainQueueWithTicks() {
+    private fun drainQueueWithTicks(): Boolean {
         var lastEmit = System.currentTimeMillis()
         var errored = false
         while (!stop && !errored) {
             val frame = try {
                 queue.poll(50, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (_: InterruptedException) {
-                return
+                return false
             }
             if (frame != null) {
                 val ok = sendFrame(frame)
@@ -142,6 +147,7 @@ class StreamSender(
             }
         }
         emit()
+        return errored
     }
 
     private lateinit var udpSocket: DatagramSocket
@@ -152,7 +158,10 @@ class StreamSender(
         return try {
             when (transport) {
                 TransportType.UDP -> {
-                    udpSocket = DatagramSocket().apply { connect(addr) }
+                    udpSocket = DatagramSocket().apply {
+                        connect(addr)
+                        setSoTimeout(5000) // 5 second timeout for sends
+                    }
                     true
                 }
                 TransportType.TCP -> {

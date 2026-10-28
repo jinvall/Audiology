@@ -76,4 +76,13 @@ object SettingsStore {
 
     /** Blocking read of saved presets for the Service recovery path. */
     suspend fun currentPresets(): List<Preset> = savedPresetsFlow.first()
+
+    /**
+     * Gets the shared DataStore instance for other components to use.
+     * Note: init() must be called before this.
+     */
+    fun getSharedDataStore(): DataStore<Preferences> {
+        require(::dataStore.isInitialized) { "SettingsStore must be initialized first" }
+        return dataStore
+    }
 }

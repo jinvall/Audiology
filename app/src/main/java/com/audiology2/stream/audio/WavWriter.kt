@@ -37,7 +37,7 @@ class WavWriter(
 
     private fun writeHeader() {
         fos?.write("RIFF".toByteArray())
-        // File size placeholder (filled on close)
+        // File size will be written when file is closed
         fos?.write(intToBytes(0))
         fos?.write("WAVE".toByteArray())
         
@@ -63,7 +63,7 @@ class WavWriter(
         
         // data chunk header
         fos?.write("data".toByteArray())
-        // data chunk size placeholder (filled on close)
+        // data chunk size will be written when file is closed
         fos?.write(intToBytes(0))
     }
 

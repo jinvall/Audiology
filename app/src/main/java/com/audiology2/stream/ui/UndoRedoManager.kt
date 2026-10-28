@@ -1,19 +1,20 @@
 package com.audiology2.stream.ui
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlin.reflect.KProperty
-import kotlin.reflect.KProperty1
+import kotlin.reflect.KMutableProperty1
 import java.util.ArrayDeque
 
 /**
  * Undo/Redo manager for editor operations.
- * Maintains a stack of reversible actions.
+ * Maintains a stack of reversible actions. Actions operate on the current
+ * project snapshot via [ProjectManager] so edits persist and the UI can
+ * refresh through [onChange].
  */
 class UndoRedoManager(
     private val maxHistory: Int = 100
 ) {
+
+    /** Invoked after an action mutates the current project (undo or redo). */
+    var onChange: ((AudioProject) -> Unit)? = null
 
     private val undoStack = ArrayDeque<Action>()
     private val redoStack = ArrayDeque<Action>()
@@ -25,13 +26,13 @@ class UndoRedoManager(
             action.execute()
             return
         }
-        
+
         isExecuting = true
         try {
             action.execute()
             undoStack.addLast(action)
             redoStack.clear()
-            
+
             // Trim history
             while (undoStack.size > maxHistory) {
                 undoStack.removeFirst()
@@ -44,7 +45,7 @@ class UndoRedoManager(
     /** Undo last action */
     fun undo(): Boolean {
         if (undoStack.isEmpty()) return false
-        
+
         val action = undoStack.removeLast()
         isExecuting = true
         try {
@@ -59,7 +60,7 @@ class UndoRedoManager(
     /** Redo last undone action */
     fun redo(): Boolean {
         if (redoStack.isEmpty()) return false
-        
+
         val action = redoStack.removeLast()
         isExecuting = true
         try {
@@ -95,6 +96,8 @@ class UndoRedoManager(
     ) {
         abstract fun execute()
         abstract fun undo()
+        final override fun equals(other: Any?) = other === this
+        final override fun hashCode() = System.identityHashCode(this)
     }
 
     /** Composite action for grouping multiple actions */
@@ -110,101 +113,88 @@ class UndoRedoManager(
         }
     }
 
-    /** Clip action for add/remove/move */
+    /** Clip action for add/remove/move. Mutates the current project via
+     *  [ProjectManager.updateCurrentProject] so edits persist and re-render. */
     class ClipAction(
         description: String,
-        private val project: AudioProject,
         private val clip: Clip,
-        private val track: Track,
+        private val trackId: String,
         private val oldStartTime: Double,
         private val oldTrackId: String,
         private val isAdd: Boolean
     ) : Action(description) {
         override fun execute() {
+            val p = ProjectManager.getCurrentProject() ?: return
             if (isAdd) {
-                track.appendClip(clip)
+                val t = p.getTrack(trackId)?.appendClip(clip)
+                if (t != null) ProjectManager.updateCurrentProject { it.updateTrack(t) }
             } else {
-                track.removeClip(clip.id)
+                val t = p.getTrack(trackId)?.removeClip(clip.id)
+                if (t != null) ProjectManager.updateCurrentProject { it.updateTrack(t) }
             }
         }
+
         override fun undo() {
+            val p = ProjectManager.getCurrentProject() ?: return
             if (isAdd) {
-                track.removeClip(clip.id)
+                val t = p.getTrack(trackId)?.removeClip(clip.id)
+                if (t != null) ProjectManager.updateCurrentProject { it.updateTrack(t) }
             } else {
-                val originalTrack = project.getTrack(oldTrackId) ?: return
-                clip.startTime = oldStartTime
-                clip.trackId = oldTrackId
-                originalTrack.appendClip(clip)
+                val t = p.getTrack(oldTrackId)?.appendClip(clip.with(startTime = oldStartTime, trackId = oldTrackId))
+                if (t != null) ProjectManager.updateCurrentProject { it.updateTrack(t) }
             }
         }
     }
 
-    /** Clip property change action */
-    class ClipPropertyAction(
-        description: String,
-        private val clip: Clip,
-        private val property: KProperty<*>,
-        private val oldValue: Any
-    ) : Action(description) {
-        override fun execute() {
-            // Executed when property is set
-        }
-        override fun undo() {
-            try {
-                // Use reflection to set the field directly
-                val field = clip.javaClass.getDeclaredField(property.name)
-                field.isAccessible = true
-                field.set(clip, oldValue)
-            } catch (e: Exception) {
-                // Ignore - property might not be a field
-            }
-        }
-    }
-
-    /** Track action for add/remove/reorder */
+    /** Track action for add/remove/reorder. */
     class TrackAction(
         description: String,
-        private val project: AudioProject,
         private val track: Track,
         private val oldIndex: Int,
         private val isAdd: Boolean
     ) : Action(description) {
+        private fun insertTrack(p: AudioProject): AudioProject {
+            if (p.getTrack(track.id) != null) return p
+            val list = p.tracks.toMutableList()
+            list.add(oldIndex.coerceIn(0, list.size), track)
+            return p.copy(tracks = list)
+        }
+
         override fun execute() {
             if (isAdd) {
-                project.tracks.add(track)
+                ProjectManager.updateCurrentProject { insertTrack(it) }
             } else {
-                project.removeTrack(track.id)
+                ProjectManager.updateCurrentProject { it.removeTrack(track.id) }
             }
         }
+
         override fun undo() {
             if (isAdd) {
-                project.removeTrack(track.id)
+                ProjectManager.updateCurrentProject { it.removeTrack(track.id) }
             } else {
-                project.tracks.add(oldIndex, track)
+                ProjectManager.updateCurrentProject { insertTrack(it) }
             }
         }
     }
 }
 
-/** Extension for easy action creation */
-inline fun <T : Any> T.recordChange(
+/** Extension for easy action creation: records a property change so undo
+ *  restores the previous value. The target object is expected to be a mutable
+ *  holder such as a [Clip]. */
+inline fun <T, V> T.recordChange(
     manager: UndoRedoManager,
-    property: KProperty1<T, *>,
-    oldValue: Any,
+    property: KMutableProperty1<T, V>,
+    oldValue: V,
     description: String
 ) {
     val target = this
     val action = object : UndoRedoManager.Action(description) {
-        override fun execute() {}
+        override fun execute() {
+            // No-op: the change was already applied by the caller.
+        }
+
         override fun undo() {
-            try {
-                val clazz = target.javaClass
-                val field = clazz.getDeclaredField(property.name)
-                field.isAccessible = true
-                field.set(target, oldValue)
-            } catch (e: Exception) {
-                // Ignore
-            }
+            property.set(target, oldValue)
         }
     }
     manager.execute(action)
