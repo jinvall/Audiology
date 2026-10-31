@@ -4,10 +4,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -46,12 +42,16 @@ class AssistantEngine(
         apiKey: String,
         systemPrompt: String,
         history: List<Pair<String, String>>,
+        userMessage: String,
         temperature: Double = 0.2
     ): AssistantProtocol.IntentCall = withContext(Dispatchers.IO) {
-        val messages = mutableListOf(
-            ChatMessage("system", systemPrompt),
-            ChatMessage("user", history.joinToString("\n") { (u, a) -> "USER: $u\nA: $a" }.ifEmpty { "Help me get started." })
-        )
+        val messages = mutableListOf(ChatMessage("system", systemPrompt))
+        for ((u, a) in history) {
+            if (u.isNotBlank()) messages.add(ChatMessage("user", u))
+            if (a.isNotBlank()) messages.add(ChatMessage("assistant", a))
+        }
+        // The current command must be the last user turn (previously dropped).
+        messages.add(ChatMessage("user", userMessage.ifBlank { "Help me get started." }))
         val body = buildJsonObject {
             put("model", model)
             putJsonArray("messages") {
@@ -87,21 +87,6 @@ class AssistantEngine(
             """{"intent":"none","reply":"Assistant request failed: ${e.message?.take(120)}"}"""
         }
 
-        if (raw.isBlank()) {
-            return@withContext AssistantProtocol.IntentCall(intent = "none", reply = "Assistant returned an empty response.")
-        }
-        val content = runCatching {
-            val root = json.parseToJsonElement(raw)
-            val choices = (root as? JsonObject)?.get("choices") as? kotlinx.serialization.json.JsonArray
-            val msg = choices?.firstOrNull()?.let { (it as? JsonObject)?.get("message") }
-            val c = (msg as? JsonObject)?.get("content")
-            (c as? JsonPrimitive)?.contentOrNull ?: c?.toString()?.trim('"')
-        }.getOrNull()
-
-        if (content != null) {
-            AssistantProtocol.parseAssistantJson(content)
-        } else {
-            AssistantProtocol.IntentCall(intent = "none", reply = "Assistant returned an unreadable response.")
-        }
+        return@withContext AssistantProtocol.parseChatCompletion(raw)
     }
 }

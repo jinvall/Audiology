@@ -883,7 +883,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 return@launch
             }
             val prompt = com.audiology2.stream.assist.AssistantProtocol.buildSystemPrompt(assistantTools.tools, projectSnapshot())
-            val call = assistantEngine.requestIntent(cfg.baseUrl, cfg.model, cfg.apiKey, prompt, assistantPairs.takeLast(6))
+            val call = assistantEngine.requestIntent(cfg.baseUrl, cfg.model, cfg.apiKey, prompt, assistantPairs.takeLast(6), text)
             if (call.intent.isBlank() || call.intent == "none") {
                 appendAssistantLine("AI: ${call.reply.ifEmpty { "I didn't catch that." }}")
             } else {

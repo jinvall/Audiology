@@ -87,4 +87,49 @@ class AssistantProtocolTest {
         assertTrue(raw.contains("sub"))
         assertTrue(raw.contains("Bass"))
     }
+
+    private fun completion(content: String?): String =
+        """{"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":${
+            if (content == null) "null" else "\"${content.replace("\"", "\\\"")}\""
+        }},"finish_reason":"stop"}]}"""
+
+    @Test
+    fun parseChatCompletion_standardContent() {
+        val body = completion("""{"intent":"set_tempo","args":{"bpm":120},"reply":"ok"}""")
+        val call = AssistantProtocol.parseChatCompletion(body)
+        assertEquals("set_tempo", call.intent)
+        assertEquals(120.0, call.argDouble("bpm"))
+    }
+
+    @Test
+    fun parseChatCompletion_reasoningOnlyModel() {
+        // Groq gpt-oss style: content null, text in `reasoning`.
+        val body = """{"choices":[{"message":{"role":"assistant","content":null,"reasoning":"{\"intent\":\"add_track\",\"args\":{\"name\":\"drums\"},\"reply\":\"ok\"}"}}]}"""
+        val call = AssistantProtocol.parseChatCompletion(body)
+        assertEquals("add_track", call.intent)
+        assertEquals("drums", call.argString("name"))
+    }
+
+    @Test
+    fun parseChatCompletion_errorEnvelopeWith200() {
+        val body = """{"error":{"message":"invalid api key","type":"auth"}}"""
+        val call = AssistantProtocol.parseChatCompletion(body)
+        assertEquals("none", call.intent)
+        assertTrue(call.reply.contains("invalid api key"))
+    }
+
+    @Test
+    fun parseChatCompletion_unreadableIncludesRawSnippet() {
+        val body = """{"unexpected":"shape","foo":1}"""
+        val call = AssistantProtocol.parseChatCompletion(body)
+        assertEquals("none", call.intent)
+        assertTrue(call.reply.contains("Raw:"))
+        assertTrue(call.reply.contains("unexpected"))
+    }
+
+    @Test
+    fun extractAssistantText_prefersContentOverReasoning() {
+        val body = """{"choices":[{"message":{"content":"the answer","reasoning":"scratch"}}]}"""
+        assertEquals("the answer", AssistantProtocol.extractAssistantText(body))
+    }
 }

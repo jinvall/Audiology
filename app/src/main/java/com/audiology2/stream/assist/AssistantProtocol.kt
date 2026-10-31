@@ -133,4 +133,45 @@ $extra
         val ok: Boolean,
         val message: String
     )
+
+    /**
+     * Extract the assistant's text from an OpenAI-compatible chat-completion
+     * response body. Tolerant of: error envelopes returned with HTTP 200,
+     * reasoning models (reasoning / reasoning_content without content),
+     * the legacy `text` field, and non-string content.
+     * Returns null when nothing usable is present.
+     */
+    fun extractAssistantText(raw: String): String? {
+        val root = runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull() ?: return null
+        val choices = root["choices"] as? kotlinx.serialization.json.JsonArray
+        val msg = (choices?.firstOrNull() as? JsonObject)?.get("message") as? JsonObject ?: return null
+        fun field(key: String): String? =
+            (msg[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        return (field("content")
+            ?: field("reasoning")
+            ?: field("reasoning_content")
+            ?: field("text")
+            ?: msg["content"]?.toString()?.takeIf { it != "null" && it != "\"\"" })?.trim()
+    }
+
+    /** Extract a gateway error message from a response body, if present. */
+    fun extractError(raw: String): String? {
+        val root = runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull() ?: return null
+        val err = root["error"] ?: return null
+        return ((err as? JsonObject)?.get("message") as? JsonPrimitive)?.contentOrNull ?: err.toString()
+    }
+
+    /**
+     * Parse a full chat-completion HTTP body into an [IntentCall].
+     * Handles error envelopes and unreadable bodies with a readable reply
+     * that includes a raw snippet for diagnosis.
+     */
+    fun parseChatCompletion(raw: String): IntentCall {
+        if (raw.isBlank()) return IntentCall(intent = "none", reply = "Assistant returned an empty response.")
+        extractError(raw)?.let { return IntentCall(intent = "none", reply = "Assistant endpoint error: ${it.take(200)}") }
+        val content = extractAssistantText(raw)
+        if (!content.isNullOrBlank()) return parseAssistantJson(content)
+        val snippet = raw.replace(Regex("\\s+"), " ").take(240)
+        return IntentCall(intent = "none", reply = "Assistant returned an unreadable response. Raw: $snippet")
+    }
 }
