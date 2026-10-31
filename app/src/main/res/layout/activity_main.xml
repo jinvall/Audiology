@@ -1626,6 +1626,14 @@
                     android:contentDescription="@string/action_import"
                     android:src="@android:drawable/ic_menu_upload" />
 
+                <ImageButton
+                    android:id="@+id/btnLibrary"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Media library"
+                    android:src="@android:drawable/ic_menu_gallery" />
+
                 <View
                     android:layout_width="1dp"
                     android:layout_height="32dp"

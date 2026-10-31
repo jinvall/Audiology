@@ -356,6 +356,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnProjects.setOnClickListener { showProjectsDialog() }
         binding.btnExport.setOnClickListener { showExportDialog() }
         binding.btnImport.setOnClickListener { showImportDialog() }
+        binding.btnLibrary.setOnClickListener { openLibrary() }
         
         // Snap grid spinner
         binding.spinnerSnapMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -1842,68 +1843,213 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     private fun makeSampleFromSelection() {
         val clip = requireSelectedClip("make a sample") ?: return
-        val project = ProjectManager.getCurrentProject() ?: return
-
-        val threshold = -48.0 // dBFS gate default
-        val dialog = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
             .setTitle("Make Beat Sample — ${clip.name}")
             .setMessage("Trim silence, normalize, snap loop length to project tempo, and place on the Beats track.")
-            .setPositiveButton("Create", null)
+            .setPositiveButton("Create") { _, _ -> makeSampleFromClip(clip) }
             .setNegativeButton("Cancel", null)
-            .create()
+            .show()
+    }
 
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                editorScope.launch {
-                    val beatSec = 60.0 / project.tempo.coerceIn(40.0, 300.0)
-                    val sampleResult = sampleMaker.makeSample(
-                        clip = clip,
-                        project = project,
-                        thresholdDb = threshold,
-                        normalize = true,
-                        snapToBeat = true
-                    )
-                    if (sampleResult == null) {
-                        runOnUiThread { Toast.makeText(this@MainActivity, "Sample creation failed", Toast.LENGTH_LONG).show() }
-                        return@launch
-                    }
+    /** Create a beat-ready sample from [clip] and place it on the Beats track. */
+    private fun makeSampleFromClip(clip: Clip) {
+        val project = ProjectManager.getCurrentProject() ?: return
+        val threshold = -48.0 // dBFS gate default
+        editorScope.launch {
+            val beatSec = 60.0 / project.tempo.coerceIn(40.0, 300.0)
+            val sampleResult = sampleMaker.makeSample(
+                clip = clip,
+                project = project,
+                thresholdDb = threshold,
+                normalize = true,
+                snapToBeat = true
+            )
+            if (sampleResult == null) {
+                runOnUiThread { Toast.makeText(this@MainActivity, "Sample creation failed", Toast.LENGTH_LONG).show() }
+                return@launch
+            }
 
-                    val updated = ProjectManager.updateCurrentProject { p ->
-                        // Ensure a Beats track exists.
-                        var beatsTrack = p.tracks.firstOrNull { it.name.equals("Beats", ignoreCase = true) }
-                        var work = p
-                        if (beatsTrack == null) {
-                            work = p.addTrack(name = "Beats", color = 0xFFFFD700.toInt())
-                            beatsTrack = work.tracks.last()
-                        }
-                        val sampleClip = Clip(
-                            name = "${clip.name} (sample)",
-                            sourcePath = sampleResult.sampleFile.absolutePath,
-                            duration = sampleResult.durationSec,
-                            startTime = sampleResult.placedAt,
-                            trackId = beatsTrack!!.id,
-                            color = 0xFFFFD700.toInt()
-                        )
-                        work.updateTrack(beatsTrack.insertClip(sampleClip, sampleResult.placedAt))
-                    }
-
-                    runOnUiThread {
-                        binding.trackTimelineView.setProject(updated)
-                        binding.trackTimelineView.postInvalidate()
-                        val loopNote = if (sampleResult.loopLengthSec > 0) {
-                            " (loops ${String.format("%.2f", sampleResult.loopLengthSec)}s = ${(beatSec / sampleResult.loopLengthSec * 4).roundToInt()} beats)"
-                        } else ""
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Sample added to Beats track${if (loopNote.isBlank()) "" else ""}. ${sampleResult.durationSec.roundToInt()}s$loopNote",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        dialog.dismiss()
-                    }
+            val updated = ProjectManager.updateCurrentProject { p ->
+                // Ensure a Beats track exists.
+                var beatsTrack = p.tracks.firstOrNull { it.name.equals("Beats", ignoreCase = true) }
+                var work = p
+                if (beatsTrack == null) {
+                    work = p.addTrack(name = "Beats", color = 0xFFFFD700.toInt())
+                    beatsTrack = work.tracks.last()
                 }
+                val sampleClip = Clip(
+                    name = "${clip.name} (sample)",
+                    sourcePath = sampleResult.sampleFile.absolutePath,
+                    duration = sampleResult.durationSec,
+                    startTime = sampleResult.placedAt,
+                    trackId = beatsTrack!!.id,
+                    color = 0xFFFFD700.toInt()
+                )
+                work.updateTrack(beatsTrack.insertClip(sampleClip, sampleResult.placedAt))
+            }
+
+            runOnUiThread {
+                binding.trackTimelineView.setProject(updated)
+                binding.trackTimelineView.postInvalidate()
+                val loopNote = if (sampleResult.loopLengthSec > 0) {
+                    " (loops ${String.format("%.2f", sampleResult.loopLengthSec)}s = ${(beatSec / sampleResult.loopLengthSec * 4).roundToInt()} beats)"
+                } else ""
+                Toast.makeText(
+                    this@MainActivity,
+                    "Sample added to Beats track. ${sampleResult.durationSec.roundToInt()}s$loopNote",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
-        dialog.show()
+    }
+
+    // ===== Media library (browse device audio -> import / sample) =====
+
+    private data class LibraryTrack(
+        val title: String,
+        val artist: String,
+        val uri: android.net.Uri,
+        val durationMs: Long
+    )
+
+    /** Preview player for library tracks (separate from timeline playback). */
+    private var libraryPlayer: android.media.MediaPlayer? = null
+
+    private val mediaAudioPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) showLibraryDialog()
+            else Toast.makeText(this, "Media library permission denied", Toast.LENGTH_LONG).show()
+        }
+
+    private fun openLibrary() {
+        val perm = if (Build.VERSION.SDK_INT >= 33) android.Manifest.permission.READ_MEDIA_AUDIO
+        else android.Manifest.permission.READ_EXTERNAL_STORAGE
+        if (ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED) {
+            showLibraryDialog()
+        } else {
+            mediaAudioPermissionLauncher.launch(perm)
+        }
+    }
+
+    private fun showLibraryDialog() {
+        editorScope.launch {
+            val tracks = loadLibraryTracks()
+            runOnUiThread {
+                if (tracks.isEmpty()) {
+                    Toast.makeText(this@MainActivity, "No music found in the device library", Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                val labels = tracks.map { "${it.title} — ${it.artist}" }.toTypedArray()
+                AlertDialog.Builder(this@MainActivity, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+                    .setTitle("Media library (${tracks.size})")
+                    .setItems(labels) { _, which -> onLibraryTrackChosen(tracks[which]) }
+                    .setNegativeButton("Close", null)
+                    .show()
+            }
+        }
+    }
+
+    private suspend fun loadLibraryTracks(): List<LibraryTrack> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val out = mutableListOf<LibraryTrack>()
+        val proj = arrayOf(
+            android.provider.MediaStore.Audio.Media._ID,
+            android.provider.MediaStore.Audio.Media.TITLE,
+            android.provider.MediaStore.Audio.Media.ARTIST,
+            android.provider.MediaStore.Audio.Media.DURATION
+        )
+        try {
+            contentResolver.query(
+                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                proj, null, null,
+                android.provider.MediaStore.Audio.Media.TITLE + " ASC"
+            )?.use { c ->
+                val idCol = c.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media._ID)
+                val titleCol = c.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.TITLE)
+                val artistCol = c.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.ARTIST)
+                val durCol = c.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DURATION)
+                while (c.moveToNext()) {
+                    val id = c.getLong(idCol)
+                    val uri = android.content.ContentUris.withAppendedId(
+                        android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
+                    )
+                    val artist = (c.getString(artistCol) ?: "Unknown").let { if (it == "<unknown>") "Unknown" else it }
+                    out.add(LibraryTrack(c.getString(titleCol) ?: "Track", artist, uri, c.getLong(durCol)))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("Editor", "library query failed", e)
+        }
+        out
+    }
+
+    private fun onLibraryTrackChosen(track: LibraryTrack) {
+        val secs = (track.durationMs / 1000) % 60
+        val mins = track.durationMs / 60000
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle(track.title)
+            .setMessage("${track.artist} · ${mins}:%02d".format(secs))
+            .setPositiveButton("Sample this") { _, _ -> sampleLibraryTrack(track) }
+            .setNeutralButton("Preview") { _, _ -> toggleLibraryPreview(track) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun toggleLibraryPreview(track: LibraryTrack) {
+        val existing = libraryPlayer
+        libraryPlayer = null
+        if (existing != null) {
+            runCatching { existing.stop() }
+            runCatching { existing.release() }
+            return
+        }
+        try {
+            val mp = android.media.MediaPlayer().apply {
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                setDataSource(this@MainActivity, track.uri)
+                setOnCompletionListener {
+                    runCatching { it.release() }
+                    if (libraryPlayer === it) libraryPlayer = null
+                }
+                prepare()
+                start()
+            }
+            libraryPlayer = mp
+            Toast.makeText(this, "Previewing: ${track.title}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Preview failed: ${e.message?.take(80)}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun sampleLibraryTrack(track: LibraryTrack) {
+        runCatching { libraryPlayer?.stop() }
+        runCatching { libraryPlayer?.release() }
+        libraryPlayer = null
+        val project = ProjectManager.getCurrentProject() ?: return
+        val importer = AudioImporter(this, editorScope)
+        val progress = Toast.makeText(this, "Importing ${track.title}…", Toast.LENGTH_SHORT).apply { show() }
+        editorScope.launch {
+            val result = importer.importAudioFile(project, track.uri)
+            if (result == null) {
+                runOnUiThread {
+                    progress.cancel()
+                    Toast.makeText(this@MainActivity, "Import failed", Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            val (updatedProject, _, clip) = result
+            ProjectManager.setCurrentProject(updatedProject)
+            runOnUiThread {
+                binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
+                binding.trackTimelineView.postInvalidate()
+                progress.cancel()
+            }
+            makeSampleFromClip(clip)
+        }
     }
 
     // Editor state
@@ -2798,5 +2944,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         recordingCallback?.let { service?.unregisterRecordingCallback(it) }
         runCatching { speechRecognizer?.destroy() }
         speechRecognizer = null
+        runCatching { libraryPlayer?.stop() }
+        runCatching { libraryPlayer?.release() }
+        libraryPlayer = null
     }
 }
