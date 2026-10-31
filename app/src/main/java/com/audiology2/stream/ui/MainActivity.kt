@@ -2590,11 +2590,20 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     }
 
     private fun stopStreaming() {
-        val intent = Intent(this, StreamService::class.java).apply { action = StreamService.ACTION_STOP }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-        else startService(intent)
-        if (bound) { unbindService(connection); bound = false }
+        // Never use startForegroundService() to STOP: the service's ACTION_STOP
+        // path does not call startForeground(), so Android kills the app with
+        // ForegroundServiceDidNotStartInTimeException. Stop via the bound
+        // instance, then stopService() to tear down the foreground service.
+        val svc = service
+        if (bound && svc != null) {
+            runCatching { svc.stopStreaming() }
+        }
+        if (bound) {
+            runCatching { unbindService(connection) }
+            bound = false
+        }
         service = null
+        runCatching { stopService(Intent(this, StreamService::class.java)) }
         setStateUi(ServiceState.IDLE, null)
     }
 
@@ -2621,7 +2630,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.clippingText.setTextColor(
             if (s.clipped) getColor(R.color.srp_danger) else getColor(R.color.srp_success)
         )
-        binding.captureStateText.text = "capture: " + if (s.active) "Active" else if (s.running) "Ready" else "Stopped" +
+        val captureState = if (s.active) "Active" else if (s.running) "Ready" else "Stopped"
+        binding.captureStateText.text = "capture: $captureState" +
             "  fmt=${s.pcmFormat} sr=${s.sampleRate}Hz ch=${s.channels} buf=${s.bufferMs}ms pkt=${s.effectivePacketMs}ms drops=${s.dropped}"
         binding.configText.text = getString(R.string.label_config) + ": ${s.pcmFormat}/${s.sampleRate}Hz/${s.channels}ch"
         if (s.error.isNotBlank()) setStatusBarError(s.error)

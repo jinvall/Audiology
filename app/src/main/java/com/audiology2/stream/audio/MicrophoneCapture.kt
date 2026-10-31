@@ -55,6 +55,10 @@ class MicrophoneCapture(
     private var stats = CaptureStats()
     private var sequence = 0L
     private var samplePosition = 0L
+    // Decaying holds so CLIP/Active clear after the signal stops, instead of
+    // latching on forever for the rest of the session.
+    private var clipHoldUntilMs = 0L
+    private var activeHoldUntilMs = 0L
 
         // Reusable hot-loop buffers (allocated once per (re)start).
         private var floatBuf: FloatArray = FloatArray(0)
@@ -222,15 +226,19 @@ class MicrophoneCapture(
                     val now = System.currentTimeMillis()
                     if (now - lastStatsTime >= 250) {
                         lastStatsTime = now
+                        // Decaying holds: show CLIP for ~800ms after a clipped
+                        // window, Active for ~400ms. No permanent latch.
+                        if (meter.isClipping) clipHoldUntilMs = now + 800L
+                        if (meter.isActive) activeHoldUntilMs = now + 400L
                         stats = stats.copy(
                             rmsDb = meter.rmsDb, peakDb = meter.peakDb,
-                            clipped = meter.isClipping || stats.clipped,
-                            active = meter.isActive || stats.active,
+                            clipped = now < clipHoldUntilMs,
+                            active = now < activeHoldUntilMs,
                             framesRead = samplePosition,
                             running = true
                         )
                         statsListener(stats)
-                        // reset per-window metering accumulator but keep running peaks
+                        // reset per-window metering accumulator
                         meter.reset()
                     }
                 }
