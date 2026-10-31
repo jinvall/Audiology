@@ -1029,7 +1029,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="@string/state_no_permission"
+                android:text="capture: —"
                 android:textColor="@color/srp_text_muted" />
 
             <TextView
