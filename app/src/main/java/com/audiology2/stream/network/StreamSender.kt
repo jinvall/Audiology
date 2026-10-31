@@ -13,6 +13,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -57,6 +58,8 @@ class StreamSender(
     private val sendErrors = AtomicLong()
     /** Inbound bytes read and discarded by the TCP drain thread. */
     private val drainedBytes = AtomicLong()
+    /** Consecutive send failures (drives escalating backoff; reset on success). */
+    private val consecutiveSendErrors = AtomicInteger()
     private val reconnects = AtomicLong()
     private val lastError = AtomicReference("")
     private val state = AtomicReference(StreamState.DISCONNECTED)
@@ -272,9 +275,13 @@ class StreamSender(
                 out.write(frame.packet)
                 out.flush()
             }
+            consecutiveSendErrors.set(0)
             true
         } catch (e: IOException) {
             lastError.set(e.message ?: "io error")
+            consecutiveSendErrors.incrementAndGet()
+            // Log the real cause (broken pipe / reset / closed) - previously lost.
+            Log.e("StreamSender", "send failed on ${transport}: ${e.javaClass.simpleName}: ${e.message}", e)
             closeSockets()
             updateState(StreamState.ERROR, lastError.get())
             false
@@ -309,10 +316,14 @@ class StreamSender(
     }
 
     private fun backoff() {
-        val delay = 500L * (1L + (reconnects.get() % 8)) // 0.5s..4s capped ~
+        // Escalate on consecutive failures so a broken receiver doesn't spin a
+        // tight reconnect loop; reset once a send succeeds.
+        val n = consecutiveSendErrors.get().coerceIn(0, 4)
+        val delay = (500L shl n).coerceAtMost(8000L) // 0.5s,1s,2s,4s,8s
         reconnects.incrementAndGet()
+        Log.w("StreamSender", "backoff ${delay}ms after $n consecutive error(s); lastError=${lastError.get()}")
         try {
-            Thread.sleep(delay.coerceAtMost(2000L))
+            Thread.sleep(delay)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
         }
