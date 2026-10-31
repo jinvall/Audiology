@@ -126,7 +126,8 @@ object Validators {
 
     fun validateAppSettings(s: AppSettings): ValidationResult {
         val errs = mutableListOf<String>()
-        if (!validateHost(s.network.host)) errs.add("Invalid receiver host")
+        // Blank host = local monitor (capture/meters/recording only, no stream).
+        if (s.network.host.isNotBlank() && !validateHost(s.network.host)) errs.add("Invalid receiver host")
         if (!validatePort(s.network.port)) errs.add("Invalid port (1..65535)")
         if (!validateSampleRate(s.network.sampleRate)) errs.add("Unsupported sample rate")
         if (s.network.channelMode == ChannelMode.STEREO) {

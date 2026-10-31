@@ -89,6 +89,12 @@ class StreamSender(
 
     private fun run() {
         Log.i("StreamSender", "run: starting sender loop")
+        if (host.isBlank()) {
+            // No streaming target: run capture-only. Lets the app start, meter,
+            // spectrogram and record entirely offline.
+            runLocalMonitor()
+            return
+        }
         while (!stop) {
             if (state.get() == StreamState.DISCONNECTED || state.get() == StreamState.ERROR) {
                 val resolved = resolveHost()
@@ -120,6 +126,32 @@ class StreamSender(
             }
         }
         Log.i("StreamSender", "run: sender loop ended")
+    }
+
+    /**
+     * No streaming target configured: drain the capture queue and discard so
+     * capture, meters, spectrogram and recording run fully offline without
+     * queue back-pressure.
+     */
+    private fun runLocalMonitor() {
+        Log.i("StreamSender", "run: no host -> local monitor (capture only)")
+        updateState(StreamState.CONNECTED, "local monitor")
+        emit()
+        var lastEmit = System.currentTimeMillis()
+        while (!stop) {
+            try {
+                queue.poll(50, java.util.concurrent.TimeUnit.MILLISECONDS) // discard
+            } catch (_: InterruptedException) {
+                break
+            }
+            val now = System.currentTimeMillis()
+            if (now - lastEmit >= 250) {
+                lastEmit = now
+                emit()
+            }
+        }
+        updateState(StreamState.DISCONNECTED, "stopped")
+        emit()
     }
 
     private fun drainQueueWithTicks(): Boolean {

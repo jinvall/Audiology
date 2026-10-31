@@ -32,8 +32,14 @@ class ConfigTest {
     }
 
     @Test
-    fun validateAppSettingsRejectsEmptyHost() {
-        val bad = AppSettings(network = NetworkConfig(host = "", port = 59090, sampleRate = 48000))
+    fun validateAppSettingsAllowsEmptyHostForLocalMonitor() {
+        // Blank host is valid now: capture-only local monitor (no stream).
+        val local = AppSettings(network = NetworkConfig(host = "", port = 59090, sampleRate = 48000))
+        val ok = Validators.validateAppSettings(local)
+        assertTrue(ok.isOk, "empty host should be allowed for local monitoring")
+
+        // An invalid non-blank host is still rejected.
+        val bad = AppSettings(network = NetworkConfig(host = "999.999.999.999", port = 59090, sampleRate = 48000))
         val r = Validators.validateAppSettings(bad)
         assertFalse(r.isOk)
         assertTrue(r.errors.any { it.contains("host", true) })
