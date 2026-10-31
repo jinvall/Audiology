@@ -19,6 +19,9 @@ object AudioFormat {
         InputSource.CAMCORDER -> MediaRecorder.AudioSource.CAMCORDER
         InputSource.UNPROCESSED -> MediaRecorder.AudioSource.UNPROCESSED
         InputSource.VOICE_RECOGNITION -> MediaRecorder.AudioSource.VOICE_RECOGNITION
+        // Playback capture does not use a MediaRecorder source (it builds an
+        // AudioRecord via AudioPlaybackCaptureConfiguration); value unused.
+        InputSource.PLAYBACK -> MediaRecorder.AudioSource.DEFAULT
     }
 
     /** Android AudioFormat encoding for the capture path. */

@@ -182,10 +182,26 @@ class StreamService : Service() {
         }
         acquireWakeLock()
         setState(ServiceState.CONNECTING)
-        startForeground(
-            NotificationHelper.NOTIF_ID,
-            NotificationHelper.buildNotification(this, ServiceState.CONNECTING, settings).build()
-        )
+        val notification = NotificationHelper.buildNotification(this, ServiceState.CONNECTING, settings).build()
+        val isPlayback = settings.capture.inputSource == com.audiology2.stream.config.InputSource.PLAYBACK
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            // API 34+: the FGS type must match the mode. mediaProjection needs an
+            // active projection (set by the Activity before start); microphone
+            // otherwise.
+            val fgsType = if (isPlayback) {
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            } else {
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+            try {
+                startForeground(NotificationHelper.NOTIF_ID, notification, fgsType)
+            } catch (e: Exception) {
+                Log.e(TAG, "startForeground(type=$fgsType) failed: ${e.message}")
+                startForeground(NotificationHelper.NOTIF_ID, notification)
+            }
+        } else {
+            startForeground(NotificationHelper.NOTIF_ID, notification)
+        }
         if (capture.start(buildCaptureConfig(settings))) {
             sender.start(
                 host = settings.network.host,
@@ -213,19 +229,25 @@ class StreamService : Service() {
         if (!unpause) stopStreaming() else setState(ServiceState.IDLE)
     }
 
-    private fun buildCaptureConfig(s: AppSettings): MicrophoneCapture.Config = MicrophoneCapture.Config(
-        sampleRate = s.network.sampleRate,
-        channels = if (s.network.channelMode == com.audiology2.stream.config.ChannelMode.STEREO) 2 else 1,
-        pcmFormat = s.network.pcmFormat,
-        audioSource = AudioFormat.inputSourceToAudioSource(s.capture.inputSource),
-        bufferMs = s.capture.bufferMs,
-        packetMs = s.network.packetMs,
-        maxPayloadBytes = Protocol.MAX_PAYLOAD,
-        digitalGainDb = s.capture.digitalGainDb,
-        rawBypass = s.capture.rawBypass,
-        dspConfig = s.dsp,
-        sessionId = if (s.sessionId == 0) (1..60000).random() else s.sessionId
-    )
+    private fun buildCaptureConfig(s: AppSettings): MicrophoneCapture.Config {
+        val isPlayback = s.capture.inputSource == com.audiology2.stream.config.InputSource.PLAYBACK
+        val projection = if (isPlayback) PlaybackCaptureHolder.projection else null
+        return MicrophoneCapture.Config(
+            sampleRate = s.network.sampleRate,
+            channels = if (s.network.channelMode == com.audiology2.stream.config.ChannelMode.STEREO) 2 else 1,
+            pcmFormat = s.network.pcmFormat,
+            audioSource = AudioFormat.inputSourceToAudioSource(s.capture.inputSource),
+            bufferMs = s.capture.bufferMs,
+            packetMs = s.network.packetMs,
+            maxPayloadBytes = Protocol.MAX_PAYLOAD,
+            digitalGainDb = s.capture.digitalGainDb,
+            rawBypass = s.capture.rawBypass,
+            dspConfig = s.dsp,
+            sessionId = if (s.sessionId == 0) (1..60000).random() else s.sessionId,
+            usePlaybackCapture = isPlayback && projection != null,
+            mediaProjection = projection
+        )
+    }
 
     private fun safeParse(raw: String): AppSettings = try {
         json.decodeFromString<AppSettings>(raw)

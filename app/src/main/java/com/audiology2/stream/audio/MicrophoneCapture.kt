@@ -46,7 +46,10 @@ class MicrophoneCapture(
         val digitalGainDb: Double,
         val rawBypass: Boolean,
         val dspConfig: AudioConfig,
-        val sessionId: Int
+        val sessionId: Int,
+        /** Capture device playback (other apps) via AudioPlaybackCapture. */
+        val usePlaybackCapture: Boolean = false,
+        val mediaProjection: android.media.projection.MediaProjection? = null
     )
 
     private var audioRecord: AudioRecord? = null
@@ -115,11 +118,32 @@ class MicrophoneCapture(
         val readBytes = perPacket * config.channels * encodingBytesPerSample
         val bufBytes = maxOf(minBufBytes, readBytes)
         val ar = try {
-            AudioRecord(
-                config.audioSource, config.sampleRate,
-                AudioFormat.channelConfig(config.channels),
-                actualEnc, bufBytes
-            )
+            if (config.usePlaybackCapture && android.os.Build.VERSION.SDK_INT >= 29 && config.mediaProjection != null) {
+                // Capture the device's own playback (other apps' media) rather
+                // than the mic. Same AudioRecord downstream: DSP/meters/encode.
+                val captureCfg = android.media.AudioPlaybackCaptureConfiguration.Builder(config.mediaProjection)
+                    .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .addMatchingUsage(android.media.AudioAttributes.USAGE_GAME)
+                    .addMatchingUsage(android.media.AudioAttributes.USAGE_UNKNOWN)
+                    .build()
+                AudioRecord.Builder()
+                    .setAudioFormat(
+                        android.media.AudioFormat.Builder()
+                            .setEncoding(actualEnc)
+                            .setSampleRate(config.sampleRate)
+                            .setChannelMask(AudioFormat.channelConfig(config.channels))
+                            .build()
+                    )
+                    .setBufferSizeInBytes(bufBytes)
+                    .setAudioPlaybackCaptureConfig(captureCfg)
+                    .build()
+            } else {
+                AudioRecord(
+                    config.audioSource, config.sampleRate,
+                    AudioFormat.channelConfig(config.channels),
+                    actualEnc, bufBytes
+                )
+            }
         } catch (e: Exception) {
             postError("AudioRecord init failed: ${e.message}")
             return false

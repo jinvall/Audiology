@@ -151,6 +151,56 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             }
         }
 
+    // ---- Playback capture (MediaProjection) ----
+
+    private val mediaProjectionManager: android.media.projection.MediaProjectionManager by lazy {
+        getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+    }
+
+    private val mediaProjectionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+                val mp = try {
+                    mediaProjectionManager.getMediaProjection(result.resultCode, result.data!!)
+                } catch (e: Exception) {
+                    null
+                }
+                if (mp != null) {
+                    // API 34+ tears the projection down immediately unless a
+                    // callback is registered before capture starts.
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        runCatching {
+                            mp.registerCallback(
+                                object : android.media.projection.MediaProjection.Callback() {},
+                                android.os.Handler(android.os.Looper.getMainLooper())
+                            )
+                        }
+                    }
+                    com.audiology2.stream.service.PlaybackCaptureHolder.projection = mp
+                    startStreaming()
+                } else {
+                    Toast.makeText(this, "Playback capture unavailable", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                Toast.makeText(this, "Playback capture cancelled", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    /** Start, requesting the MediaProjection grant first when capturing playback. */
+    private fun startWithInputSource() {
+        val selected = readSettingsFromViews().capture.inputSource
+        if (selected == InputSource.PLAYBACK) {
+            if (Build.VERSION.SDK_INT < 29) {
+                Toast.makeText(this, "Playback capture requires Android 10+", Toast.LENGTH_LONG).show()
+                return
+            }
+            mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+            return
+        }
+        com.audiology2.stream.service.PlaybackCaptureHolder.projection = null
+        startStreaming()
+    }
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val b = (binder as? StreamService.LocalBinder)
@@ -184,7 +234,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     }
 
     private fun initViews() {
-        binding.startBtn.setOnClickListener { startStreaming() }
+        binding.startBtn.setOnClickListener { startWithInputSource() }
         binding.stopBtn.setOnClickListener { stopStreaming() }
         binding.reconnectSwitch.isChecked = true
 
@@ -2645,6 +2695,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         }
         service = null
         runCatching { stopService(Intent(this, StreamService::class.java)) }
+        com.audiology2.stream.service.PlaybackCaptureHolder.projection = null
         setStateUi(ServiceState.IDLE, null)
     }
 
@@ -2680,8 +2731,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     private fun applyNetworkStats(s: NetworkStats) {
         binding.packetsSentText.text = getString(R.string.label_packets_sent) + ": " + s.packetsSent
-        binding.packetsLostText.text = getString(R.string.label_packets_lost) + ": - (receiver)"
-        binding.lossPctText.text = getString(R.string.label_loss_pct) + ": - (receiver)"
+        // Loss is only knowable at the receiver (needs seq-gap feedback that the
+        // protocol does not carry), so report it honestly instead of "-".
+        binding.packetsLostText.text = getString(R.string.label_packets_lost) + ": n/a (receiver-side)"
+        binding.lossPctText.text = getString(R.string.label_loss_pct) + ": n/a (receiver-side)"
         binding.sendRateText.text = getString(R.string.label_out_rate) + ": " + s.packetsSent + " sent"
         binding.queueDepthText.text = getString(R.string.label_buffer_occupancy) + ": " + s.queueDepth
         val txt = when (s.state) {

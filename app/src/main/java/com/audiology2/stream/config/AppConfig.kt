@@ -18,7 +18,14 @@ enum class InputSource {
     VOICE_CALL,
     CAMCORDER,
     UNPROCESSED,
-    VOICE_RECOGNITION
+    VOICE_RECOGNITION,
+
+    /**
+     * Capture the device's own playback (other apps' media) via Android
+     * AudioPlaybackCapture + MediaProjection. Requires API 29+ and a
+     * user-granted MediaProjection. The source app must permit capture.
+     */
+    PLAYBACK
 }
 
 /** Wire PCM format selected for streaming. */
