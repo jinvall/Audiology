@@ -2514,26 +2514,67 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     }
 
     private fun applyPreset(s: AppSettings) {
+        // Presets tune DSP/network behaviour. They must NEVER clobber the
+        // receiver host/port, which is user infrastructure, not a preset.
+        val current = readSettingsFromViews()
+        val merged = s.copy(
+            network = s.network.copy(
+                host = current.network.host,
+                port = current.network.port
+            )
+        )
         updatingViews = true
-        applySettingsToViews(s)
+        applySettingsToViews(merged)
         updatingViews = false
-        lifecycleScope.launch { SettingsStore.saveSettings(s) }
-        val pi = Presets.BUILT_IN.indexOfFirst { it.name == s.activePreset }
+        lifecycleScope.launch { SettingsStore.saveSettings(merged) }
+        val pi = Presets.BUILT_IN.indexOfFirst { it.name == merged.activePreset }
         if (pi >= 0) binding.presetSpinner.setSelection(pi)
     }
 
+    /** Save the current views as a NEW preset (never overwrites built-ins). */
     private fun saveCustomPreset() {
         val cur = readSettingsFromViews()
-        val name = cur.activePreset.ifEmpty { "Custom ${System.currentTimeMillis() % 100000}" }
-        val preset = Preset(name = name, settings = cur, builtIn = false)
-        lifecycleScope.launch {
-            val existing = SettingsStore.currentPresets().filter { !it.builtIn } .toMutableList()
-            existing.removeAll { it.name == preset.name }
-            existing.add(preset)
-            SettingsStore.savePresets(existing)
-            saveSettingsSync(cur.copy(activePreset = name))
+        val suggested = cur.activePreset.ifEmpty { "Custom ${System.currentTimeMillis() % 100000}" }
+        val input = EditText(this).apply {
+            setText(suggested)
+            hint = "Preset name"
+            setPadding(24, 16, 24, 16)
         }
-        Toast.makeText(this, "Saved preset $name", Toast.LENGTH_SHORT).show()
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Save preset as")
+            .setView(input)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+            .also { d ->
+                d.setOnShowListener {
+                    d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val name = input.text.toString().trim()
+                        if (name.isEmpty()) {
+                            Toast.makeText(this, "Enter a name", Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+                        if (Presets.builtInByName(name) != null) {
+                            Toast.makeText(this, "'$name' is a built-in preset - choose another name", Toast.LENGTH_LONG).show()
+                            return@setOnClickListener
+                        }
+                        lifecycleScope.launch {
+                            val custom = SettingsStore.currentPresets().filter { !it.builtIn }.toMutableList()
+                            // Overwrite only a custom preset with the same name.
+                            custom.removeAll { it.name == name }
+                            custom.add(Preset(name = name, settings = cur, builtIn = false))
+                            SettingsStore.savePresets(custom)
+                            SettingsStore.saveSettings(cur.copy(activePreset = name))
+                        }
+                        binding.presetSpinner.setSelection(
+                            Presets.names.indexOf(name).let { if (it >= 0) it else binding.presetSpinner.selectedItemPosition }
+                        )
+                        Toast.makeText(this, "Saved preset $name", Toast.LENGTH_SHORT).show()
+                        d.dismiss()
+                    }
+                }
+                d.show()
+            }
     }
 
     private fun resetToDefaults() {
