@@ -35,6 +35,8 @@ import com.audiology2.stream.assist.AssistantProtocol
 import com.audiology2.stream.assist.AssistantProtocol.ActionResult
 import com.audiology2.stream.assist.AssistantProtocol.Tool.ArgSpec
 import com.audiology2.stream.assist.AssistantProtocol.Tool
+import com.audiology2.stream.assist.AssistantProvider
+import com.audiology2.stream.assist.AssistantStore
 import com.audiology2.stream.audio.AudioPlayer
 import com.audiology2.stream.audio.CaptureStats
 import com.audiology2.stream.config.AppSettings
@@ -104,6 +106,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private val assistantTools = com.audiology2.stream.assist.DawToolbox()
     private val assistantPairs = mutableListOf<Pair<String, String>>()
     private var speechRecognizer: android.speech.SpeechRecognizer? = null
+    private var updatingAssistantProvider = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Force LTR before super.onCreate so window is configured before view inflation
@@ -561,6 +564,26 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         registerAssistantTools()
         loadAssistantConfig()
 
+        // Provider preset dropdown. Default = Groq Free (free tier); selecting
+        // a preset fills base URL + model. Keys are per-provider.
+        val providers = AssistantProvider.entries
+        binding.assistantProviderSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            providers.map { it.label }
+        )
+        binding.assistantProviderSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (updatingAssistantProvider) return
+                val provider = providers.getOrNull(position) ?: return
+                if (provider == AssistantProvider.CUSTOM) return
+                binding.assistantBaseUrl.setText(provider.baseUrl)
+                binding.assistantModel.setText(provider.model)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
         binding.btnAssistantSend.setOnClickListener { sendAssistantCommand(binding.assistantInput.text.toString()) }
         binding.assistantInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
@@ -579,21 +602,33 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     private fun loadAssistantConfig() {
         lifecycleScope.launch {
-            val cfg = com.audiology2.stream.assist.AssistantStore.currentConfig()
-            // Migration: the shipped default is now OpenRouter free. If the
-            // stored config is still the legacy OpenAI default (never
-            // customized), adopt the new default and keep the encrypted key.
-            if (cfg.baseUrl == "https://api.openai.com/v1" && cfg.model == "gpt-4o-mini") {
-                com.audiology2.stream.assist.AssistantStore.saveConfig(
-                    "https://openrouter.ai/api/v1", "openai/gpt-oss-120b:free", cfg.apiKey
+            val cfg = AssistantStore.currentConfig()
+            val providers = AssistantProvider.entries
+
+            // Migration: adopt the free-tier default when still on the legacy
+            // OpenAI default (never customized), keeping the encrypted key.
+            val effective = if (cfg.baseUrl == "https://api.openai.com/v1" && cfg.model == "gpt-4o-mini") {
+                AssistantStore.saveConfig(
+                    AssistantProvider.DEFAULT.baseUrl,
+                    AssistantProvider.DEFAULT.model,
+                    cfg.apiKey
                 )
-                binding.assistantBaseUrl.setText("https://openrouter.ai/api/v1")
-                binding.assistantModel.setText("openai/gpt-oss-120b:free")
-            } else {
-                binding.assistantBaseUrl.setText(cfg.baseUrl)
-                binding.assistantModel.setText(cfg.model)
-            }
-            binding.assistantKey.setText(if (cfg.hasKey) "••••••••" else "")
+                cfg.copy(
+                    baseUrl = AssistantProvider.DEFAULT.baseUrl,
+                    model = AssistantProvider.DEFAULT.model
+                )
+            } else cfg
+
+            binding.assistantBaseUrl.setText(effective.baseUrl)
+            binding.assistantModel.setText(effective.model)
+            binding.assistantKey.setText(if (effective.hasKey) "••••••••" else "")
+
+            val match = AssistantProvider.match(effective.baseUrl, effective.model)
+                ?: AssistantProvider.CUSTOM
+            val idx = providers.indexOf(match).coerceAtLeast(0)
+            updatingAssistantProvider = true
+            binding.assistantProviderSpinner.setSelection(idx, false)
+            updatingAssistantProvider = false
         }
     }
 
@@ -601,9 +636,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         lifecycleScope.launch {
             val entered = binding.assistantKey.text.toString()
             val key = if (entered == "••••••••") {
-                com.audiology2.stream.assist.AssistantStore.currentConfig().apiKey
+                AssistantStore.currentConfig().apiKey
             } else entered
-            com.audiology2.stream.assist.AssistantStore.saveConfig(
+            AssistantStore.saveConfig(
                 binding.assistantBaseUrl.text.toString(),
                 binding.assistantModel.text.toString(),
                 key.trim()
