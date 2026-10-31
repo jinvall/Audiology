@@ -174,7 +174,8 @@ class StreamService : Service() {
     private fun startStreaming(s: AppSettings) {
         settings = s
         Log.i(TAG, "startStreaming: host=${s.network.host} port=${s.network.port} transport=${s.network.transport}")
-        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+        val playbackMode = s.capture.inputSource == com.audiology2.stream.config.InputSource.PLAYBACK
+        if (!playbackMode && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
             publishCapture(CaptureStats(running = false, error = "microphone permission required"))
             setState(ServiceState.ERROR)

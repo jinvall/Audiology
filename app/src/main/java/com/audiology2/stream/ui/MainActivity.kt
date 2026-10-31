@@ -138,6 +138,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         initViews()
         setupExpandableSections()
         loadSettings()
+        // Live monitor on launch: begin capture so the waveform, spectrogram
+        // and Spectral Tools are active immediately. If the mic permission is
+        // missing we ask (requestNeededPermissions) and start resumes on grant.
+        autoStartMonitor()
         requestNeededPermissions()
         
         // Initialize audio player
@@ -148,14 +152,27 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         loadLastProject()
     }
 
+    /** True when Start was pressed but the mic permission had to be requested first. */
+    private var pendingStartAfterPermission = false
+
+    /** Guards one-time auto-start of the live monitor on launch. */
+    private var autoStartAttempted = false
+
     private val permissionContract =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
-            val granted = perms.entries.all { it.value }
-            if (granted) {
+            val micGranted = perms[android.Manifest.permission.RECORD_AUDIO] != false
+            val allGranted = perms.entries.all { it.value }
+            if (allGranted) {
                 Toast.makeText(this, "Microphone permission granted", Toast.LENGTH_SHORT).show()
             } else {
                 val missing = perms.filterValues { !it }.keys.joinToString()
                 Toast.makeText(this, "Permission denied: $missing", Toast.LENGTH_LONG).show()
+            }
+            // Resume the Start that triggered this request - don't make the
+            // user press Start a second time.
+            if (pendingStartAfterPermission) {
+                pendingStartAfterPermission = false
+                if (micGranted) startWithInputSource()
             }
         }
 
@@ -244,6 +261,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private fun initViews() {
         binding.startBtn.setOnClickListener { startWithInputSource() }
         binding.stopBtn.setOnClickListener { stopStreaming() }
+        // System-wide transport (always-visible status bar).
+        binding.startBtnTop.setOnClickListener { startWithInputSource() }
+        binding.stopBtnTop.setOnClickListener { stopStreaming() }
         binding.reconnectSwitch.isChecked = true
 
         // Spinner adapters (one per array)
@@ -2798,6 +2818,20 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     // ---- Permissions ----
 
+    /** Auto-start capture on launch so the live monitor is immediately active. */
+    private fun autoStartMonitor() {
+        if (autoStartAttempted) return
+        autoStartAttempted = true
+        // Playback capture needs an explicit MediaProjection grant -> manual start.
+        if (readSettingsFromViews().capture.inputSource == InputSource.PLAYBACK) return
+        if (hasMicPermission()) {
+            startStreaming()
+        } else {
+            // requestNeededPermissions() asks; Start resumes automatically on grant.
+            pendingStartAfterPermission = true
+        }
+    }
+
     private fun requestNeededPermissions() {
         val needed = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -2816,7 +2850,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     // ---- Streaming ----
 
     private fun startStreaming() {
-        if (!hasMicPermission()) {
+        // Playback capture needs the MediaProjection grant, not the mic.
+        val playback = readSettingsFromViews().capture.inputSource == InputSource.PLAYBACK
+        if (!playback && !hasMicPermission()) {
+            pendingStartAfterPermission = true
             permissionContract.launch(arrayOf(android.Manifest.permission.RECORD_AUDIO))
             return
         }

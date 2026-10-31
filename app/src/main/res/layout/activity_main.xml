@@ -50,6 +50,28 @@
             android:text="host:port"
             android:textColor="@color/srp_text_muted"
             android:paddingStart="8dp" />
+
+        <!-- System-wide transport: always visible, no need to open a card -->
+        <Button
+            android:id="@+id/startBtnTop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="START"
+            android:textColor="@color/md_theme_dark_onPrimary"
+            android:backgroundTint="@color/srp_primary" />
+
+        <Button
+            android:id="@+id/stopBtnTop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="STOP" />
     </LinearLayout>
 
     <!-- Scroll container is a fallback: the panels below collapse by default, so
