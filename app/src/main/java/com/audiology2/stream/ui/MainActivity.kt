@@ -61,11 +61,14 @@ import com.audiology2.stream.network.NetworkStats
 import com.audiology2.stream.network.StreamState
 import com.audiology2.stream.service.ServiceState
 import com.audiology2.stream.service.StreamService
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlin.math.roundToInt
 import java.io.File
@@ -81,7 +84,12 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     
     // New editor components
-    private val editorScope = CoroutineScope(Dispatchers.Default + Job())
+    // Any uncaught error in a background edit task is logged, not fatal.
+    private val editorExceptionHandler = CoroutineExceptionHandler { _, e ->
+        android.util.Log.e("Editor", "Unhandled editor-coroutine error", e)
+    }
+    private val editorScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default + editorExceptionHandler)
     private val fftProcessor = FFTProcessor(fftSize = 2048, sampleRate = 48000)
     private lateinit var audioPlayer: AudioPlayer
     private val undoRedoManager = UndoRedoManager()
@@ -938,7 +946,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             if (call.intent.isBlank() || call.intent == "none") {
                 appendAssistantLine("AI: ${call.reply.ifEmpty { "I didn't catch that." }}")
             } else {
-                val result = assistantTools.execute(call)
+                // Handlers touch views (timeline, dialogs) -> run on the main
+                // thread. Heavy work inside a handler launches its own coroutine.
+                val result = withContext(Dispatchers.Main) { assistantTools.execute(call) }
                 appendAssistantLine("AI: ${call.reply.ifEmpty { result.message }}")
                 appendAssistantResult(result)
             }
