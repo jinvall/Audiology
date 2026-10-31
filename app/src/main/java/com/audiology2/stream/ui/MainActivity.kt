@@ -456,7 +456,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 ProjectManager.updateCurrentProject { it.addTrack(name = "Track 1", color = 0xFF00D4AA.toInt()) }
             }
 
-            setupTimeline(ProjectManager.getCurrentProject())
+            // setupTimeline touches views -> must run on the main thread.
+            withContext(Dispatchers.Main) {
+                setupTimeline(ProjectManager.getCurrentProject())
+            }
         }
     }
 

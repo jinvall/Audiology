@@ -61,7 +61,8 @@ class SpectralCardController(
         spectrumSampleRate = sampleRate
         spectrumFftSize = fftSize
         snapshot = computeSnapshot()
-        pushToUi()
+        // Views must be touched on the main thread; this runs on the capture thread.
+        pitchLabel.post { pushToUi() }
     }
 
     private fun computeSnapshot(): SpectralSnapshot {
