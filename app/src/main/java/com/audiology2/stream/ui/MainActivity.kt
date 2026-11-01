@@ -2920,6 +2920,11 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.peakText.text = getString(R.string.label_peak) + ": " + s.peakDb.dbDisplay()
         binding.rmsBar.progress = dbToLinear(s.rmsDb)
         binding.peakBar.progress = dbToLinear(s.peakDb)
+        // Console gauges (live).
+        binding.rmsMeterView.label = "RMS"
+        binding.rmsMeterView.setLevel(s.rmsDb, s.clipped)
+        binding.peakMeterView.label = "PEAK"
+        binding.peakMeterView.setLevel(s.peakDb, s.clipped)
         binding.clippingText.text = getString(R.string.label_clipping) + ": " + (if (s.clipped) "CLIP!" else "ok")
         binding.clippingText.setTextColor(
             if (s.clipped) getColor(R.color.srp_danger) else getColor(R.color.srp_success)

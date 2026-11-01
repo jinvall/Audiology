@@ -1038,6 +1038,19 @@
                 android:text="@string/label_peak"
                 android:textColor="@color/srp_text_muted" />
 
+            <!-- Console gauges (live input levels) -->
+            <com.audiology2.stream.ui.VuMeterView
+                android:id="@+id/rmsMeterView"
+                android:layout_width="match_parent"
+                android:layout_height="26dp"
+                android:layout_marginTop="6dp" />
+
+            <com.audiology2.stream.ui.VuMeterView
+                android:id="@+id/peakMeterView"
+                android:layout_width="match_parent"
+                android:layout_height="26dp"
+                android:layout_marginTop="4dp" />
+
             <TextView
                 android:id="@+id/clippingText"
                 android:layout_width="wrap_content"
