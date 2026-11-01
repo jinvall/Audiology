@@ -159,6 +159,11 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     /** When true, begin recording as soon as the capture service is up. */
     private var pendingAutoRecord = false
 
+    // Input monitoring: play the captured (post-DSP) signal to the device output.
+    private var monitorEnabled = false
+    private var monitorTrack: android.media.AudioTrack? = null
+    private var monitorShortBuf = ShortArray(0)
+
     private val permissionContract =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
             val micGranted = perms[android.Manifest.permission.RECORD_AUDIO] != false
@@ -240,6 +245,22 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             recordingCallback = { samples, framesRead, channels ->
                 val sr = binding.sampleRateEdit.text.toString().toIntOrNull() ?: 48000
                 binding.mainWaveformView.setWaveform(samples, sr)
+
+                // Input monitoring: play the captured (post-DSP) signal out.
+                if (monitorEnabled) {
+                    val tr = ensureMonitorTrack(sr, channels)
+                    if (tr != null) {
+                        val n = (framesRead * channels).coerceIn(0, samples.size)
+                        if (monitorShortBuf.size < n) monitorShortBuf = ShortArray(n)
+                        val buf = monitorShortBuf
+                        for (i in 0 until n) {
+                            var v = samples[i]
+                            if (!v.isFinite()) v = 0f
+                            buf[i] = (v.coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+                        }
+                        runCatching { tr.write(buf, 0, n) }
+                    }
+                }
 
                 val frames = fftProcessor.process(samples, framesRead, channels)
                 frames?.let { spectrogramFrames ->
@@ -346,6 +367,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                     sw.onCheckedChanged = { if (!updatingViews) updateSettingsFromViews() }
             }
         }
+
+        // Input monitoring (mic -> speaker).
+        binding.monitorSwitch.onCheckedChanged = { on -> setInputMonitor(on) }
 
         // Gain rotary knob: -60..+60 dB
         binding.gainKnob.setOnValueChangeListener { value ->
@@ -2390,6 +2414,43 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         audioPlayer.seek(audioPlayer.getDurationSec())
     }
 
+    /** Lazy monitor AudioTrack (created on the capture thread with real sr/ch). */
+    private fun ensureMonitorTrack(sr: Int, channels: Int): android.media.AudioTrack? {
+        monitorTrack?.let { return it }
+        return try {
+            val ch = channels.coerceAtLeast(1)
+            val channelMask = if (ch == 1) android.media.AudioFormat.CHANNEL_OUT_MONO
+            else android.media.AudioFormat.CHANNEL_OUT_STEREO
+            val minBuf = android.media.AudioTrack.getMinBufferSize(
+                sr, channelMask, android.media.AudioFormat.ENCODING_PCM_16BIT
+            )
+            val bufSize = maxOf(minBuf, sr * ch * 2 / 5) // ~200ms
+            val at = android.media.AudioTrack(
+                android.media.AudioManager.STREAM_MUSIC, sr, channelMask,
+                android.media.AudioFormat.ENCODING_PCM_16BIT, bufSize,
+                android.media.AudioTrack.MODE_STREAM
+            )
+            at.play()
+            monitorTrack = at
+            at
+        } catch (e: Exception) {
+            android.util.Log.w("Editor", "monitor track init failed", e)
+            null
+        }
+    }
+
+    /** Enable/disable input monitoring to the device output (mic -> speaker). */
+    private fun setInputMonitor(on: Boolean) {
+        monitorEnabled = on
+        if (!on) {
+            runCatching { monitorTrack?.stop() }
+            runCatching { monitorTrack?.release() }
+            monitorTrack = null
+        } else {
+            Toast.makeText(this, "Monitoring input - use headphones to avoid feedback", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun toggleRecording() {
         if (service == null) return
         
@@ -3267,5 +3328,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         runCatching { libraryPlayer?.stop() }
         runCatching { libraryPlayer?.release() }
         libraryPlayer = null
+        runCatching { monitorTrack?.stop() }
+        runCatching { monitorTrack?.release() }
+        monitorTrack = null
     }
 }

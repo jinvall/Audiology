@@ -277,6 +277,13 @@
             android:padding="8dp"
             android:visibility="gone">
 
+            <com.audiology2.stream.ui.LedSwitch
+                android:id="@+id/monitorSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="Monitor input → speaker" />
+
             <Spinner
                 android:id="@+id/inputSourceSpinner"
                 android:layout_width="match_parent"
