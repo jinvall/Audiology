@@ -338,6 +338,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             if (!updatingViews) updateSettingsFromViews()
         }
 
+        // Console knobs (Processing card): two-way synced to the numeric fields
+        // below, which remain the source of truth for settings.
+        setupConsoleKnobs()
+
         // Editor / Timeline initialization
         initEditor()
 
@@ -2586,7 +2590,25 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         }
     }
 
+    /** Configure the Processing-card console knobs and sync them to the fields. */
+    private fun setupConsoleKnobs() {
+        binding.knobEqGain.apply { minValue = -24.0; maxValue = 24.0; step = 1.0; unit = "dB"; label = "EQ" }
+        binding.knobCompThresh.apply { minValue = -60.0; maxValue = 0.0; step = 1.0; unit = "dB"; label = "THR" }
+        binding.knobEchoMix.apply { minValue = 0.0; maxValue = 1.0; step = 0.01; unit = ""; label = "MIX" }
+        // Knob -> field (the TextWatcher then persists via updateSettingsFromViews).
+        binding.knobEqGain.onValueChanged = { v -> binding.eqGainEdit.setText(fmtKnob(v, 1)) }
+        binding.knobCompThresh.onValueChanged = { v -> binding.compThreshEdit.setText(fmtKnob(v, 0)) }
+        binding.knobEchoMix.onValueChanged = { v -> binding.echoMixEdit.setText(fmtKnob(v, 2)) }
+    }
+
+    private fun fmtKnob(v: Double, decimals: Int): String =
+        if (decimals <= 0) v.roundToInt().toString() else String.format("%.${decimals}f", v)
+
     private fun applySettingsToViews(s: AppSettings) {
+        // Console knobs mirror the loaded settings (silent: no listener loop).
+        binding.knobEqGain.setValueSilently(s.dsp.eqGainDb)
+        binding.knobCompThresh.setValueSilently(s.dsp.compThresholdDb)
+        binding.knobEchoMix.setValueSilently(s.dsp.echoMix)
         // Only update text fields if value actually changed to avoid cursor jumps
         val currentHost = binding.hostEdit.text.toString()
         if (currentHost != s.network.host) binding.hostEdit.setText(s.network.host)

@@ -444,6 +444,49 @@
             android:padding="8dp"
             android:visibility="gone">
 
+            <!-- Console knob strip (two-way synced to the fields below) -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CONSOLE"
+                android:textColor="@color/srp_text_subtle"
+                android:textSize="10sp"
+                android:letterSpacing="0.2"
+                android:fontFamily="monospace"
+                android:paddingStart="2dp"
+                android:paddingBottom="2dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:background="@drawable/console_card_bg"
+                android:padding="6dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobEqGain"
+                        android:layout_width="88dp"
+                        android:layout_height="108dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobCompThresh"
+                        android:layout_width="88dp"
+                        android:layout_height="108dp"
+                        android:layout_marginStart="6dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobEchoMix"
+                        android:layout_width="88dp"
+                        android:layout_height="108dp"
+                        android:layout_marginStart="6dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/agcSwitch"
                 android:layout_width="match_parent"
