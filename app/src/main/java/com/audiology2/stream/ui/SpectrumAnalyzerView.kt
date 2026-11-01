@@ -6,77 +6,110 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
 import android.util.AttributeSet
+import android.view.MotionEvent
 import android.view.View
 import kotlin.math.max
+import kotlin.math.min
 
 /**
- * Spectroid-style spectrum analyzer:
- *  - top: live amplitude-vs-frequency spectrum with a peak-hold trace,
- *  - bottom: scrolling waterfall (frequency on X, time scrolling down),
- *  - a marker labelling the dominant frequency in Hz.
+ * Interactive spectral view (Spectroid-style spectrum + a LATERAL waterfall).
  *
- * Feed it magnitude frames (0..1 bins) from the capture FFT via [push].
+ *  - top: live amplitude-vs-frequency spectrum with a peak-hold trace and a
+ *    dominant-frequency marker;
+ *  - bottom: a lateral waterfall - TIME on X (newest at the right),
+ *    FREQUENCY on Y (low at the bottom) - so a region can be
+ *    highlighted/selected for spectral edits;
+ *  - drag on the waterfall to select a time x frequency region; the host is
+ *    notified with Hz bounds via [onSelection] and can read [selection].
+ *
+ * Fed magnitude frames (0..1 bins) from the capture FFT via [push].
  */
 class SpectrumAnalyzerView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    private val COLS = 256
-    private val ROWS = 96
+    private val HISTORY = 220   // time columns (X)
+    private val BANDS = 120     // frequency rows (Y)
 
     private var sampleRate = 48000
     private var fftSize = 2048
     private var binCount = 1024
 
-    /** Waterfall ring: newest row at the bottom (scrolling down). */
-    private val waterfall = FloatArray(COLS * ROWS)
+    /** Waterfall history: column-major [time][band]; newest column at the right. */
+    private val hist = FloatArray(HISTORY * BANDS)
     private var haveData = false
 
-    private val current = FloatArray(COLS)
-    private val peakHold = FloatArray(COLS)
-
+    private val spectrum = FloatArray(BANDS) // reused: downsampled magnitude per band
+    private val peakHold = FloatArray(BANDS)
     private var peakHz = 0.0
     private var peakLevel = 0f
+
+    // ---- Selection (view coordinates) ----
+    private var selStartX = -1f
+    private var selStartY = -1f
+    private var selEndX = -1f
+    private var selEndY = -1f
+    private var isSelecting = false
+
+    /** Selected frequency band in Hz (or null when nothing is selected). */
+    val selectionFreq: Pair<Double, Double>?
+        get() {
+            if (selStartX < 0f) return null
+            val (lo, hi) = yToFreq(min(selStartY, selEndY), max(selStartY, selEndY))
+            return lo to hi
+        }
+
+    /** Selected time span as a 0..1 fraction of the visible history (or null). */
+    val selectionTimeFraction: Pair<Float, Float>?
+        get() {
+            if (selStartX < 0f) return null
+            val lo = (min(selStartX, selEndX) / width).coerceIn(0f, 1f)
+            val hi = (max(selStartX, selEndX) / width).coerceIn(0f, 1f)
+            return lo to hi
+        }
+
+    /** Notified when a selection completes: (timeLoFrac, timeHiFrac, freqLoHz, freqHiHz). */
+    var onSelection: ((Float, Float, Double, Double) -> Unit)? = null
+
+    fun clearSelection() {
+        selStartX = -1f
+        selStartY = -1f
+        selEndX = -1f
+        selEndY = -1f
+        isSelecting = false
+        invalidate()
+    }
 
     private val density = resources.displayMetrics.density
     private fun dp(v: Float) = v * density
 
-    private val paintSpectrum = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
+    private val paintSpectrum = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val paintSpectrumLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(1.5f)
-        color = 0xFF12F012.toInt()
+        style = Paint.Style.STROKE; strokeWidth = dp(1.5f); color = 0xFF12F012.toInt()
     }
     private val paintPeakHold = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(1f)
-        color = 0xFFFFB020.toInt()
+        style = Paint.Style.STROKE; strokeWidth = dp(1f); color = 0xFFFFB020.toInt()
     }
-    private val paintGrid = Paint().apply {
-        color = 0xFF3D2D61.toInt()
-        strokeWidth = 1f
-    }
+    private val paintGrid = Paint().apply { color = 0xFF3D2D61.toInt(); strokeWidth = 1f }
     private val paintAxisText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF9698AB.toInt()
-        textSize = dp(9f)
+        color = 0xFF9698AB.toInt(); textSize = dp(9f)
     }
     private val paintMarker = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFF4F00.toInt()
-        strokeWidth = dp(1.5f)
-        textSize = dp(10f)
+        color = 0xFFFF4F00.toInt(); strokeWidth = dp(1.5f); textSize = dp(10f)
+    }
+    private val paintSelFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x5533FFAA }
+    private val paintSelBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = dp(1.5f); color = 0xFF33FFAA.toInt()
     }
 
     private val spectrumPath = Path()
     private val peakPath = Path()
-
     private var bmp: Bitmap? = null
-    private val pixels = IntArray(COLS * ROWS)
-
+    private val pixels = IntArray(HISTORY * BANDS)
     private var spectrumGradient: LinearGradient? = null
     private var gradientW = 0f
 
@@ -86,38 +119,78 @@ class SpectrumAnalyzerView @JvmOverloads constructor(
         fftSize = ffts
         binCount = frame.size
 
-        // Downsample the spectrum to COLS columns (peak within each group).
-        val group = max(1, binCount / COLS)
-        for (c in 0 until COLS) {
-            val start = c * group
-            if (start >= binCount) {
-                current[c] = 0f
-                continue
-            }
-            val end = ((c + 1) * group).coerceAtMost(binCount)
+        // Downsample spectrum to BANDS (freq) rows.
+        val group = max(1, binCount / BANDS)
+        for (b in 0 until BANDS) {
+            val start = b * group
+            if (start >= binCount) { spectrum[b] = 0f; continue }
+            val end = ((b + 1) * group).coerceAtMost(binCount)
             var m = 0f
             for (i in start until end) if (frame[i] > m) m = frame[i]
-            current[c] = m
-            peakHold[c] = if (m >= peakHold[c]) m else (peakHold[c] - 0.015f).coerceAtLeast(m)
+            spectrum[b] = m
+            peakHold[b] = if (m >= peakHold[b]) m else (peakHold[b] - 0.015f).coerceAtLeast(m)
         }
 
         // Dominant partial (skip DC).
-        var best = 1
-        var bestV = 0f
-        for (i in 1 until binCount) {
-            if (frame[i] > bestV) {
-                bestV = frame[i]
-                best = i
-            }
-        }
+        var best = 1; var bestV = 0f
+        for (i in 1 until binCount) if (frame[i] > bestV) { bestV = frame[i]; best = i }
         peakLevel = bestV
         peakHz = best.toDouble() * sampleRate / fftSize
 
-        // Scroll waterfall: shift one row, write new at bottom.
-        System.arraycopy(waterfall, COLS, waterfall, 0, COLS * (ROWS - 1))
-        System.arraycopy(current, 0, waterfall, COLS * (ROWS - 1), COLS)
+        // Scroll the lateral waterfall left; write the newest column at the right.
+        System.arraycopy(hist, BANDS, hist, 0, BANDS * (HISTORY - 1))
+        System.arraycopy(spectrum, 0, hist, BANDS * (HISTORY - 1), BANDS)
         haveData = true
         postInvalidateOnAnimation()
+    }
+
+    // ---- Touch: select a region on the waterfall ----
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val wfTop = height * 0.46f
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (event.y < wfTop) return false
+                parent?.requestDisallowInterceptTouchEvent(true)
+                selStartX = event.x; selStartY = event.y
+                selEndX = event.x; selEndY = event.y
+                isSelecting = true
+                invalidate()
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!isSelecting) return false
+                selEndX = event.x.coerceIn(0f, width.toFloat())
+                selEndY = event.y.coerceIn(wfTop, height.toFloat())
+                invalidate()
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                isSelecting = false
+                parent?.requestDisallowInterceptTouchEvent(false)
+                val tf = selectionTimeFraction
+                val fq = selectionFreq
+                if (tf != null && fq != null && (selEndX - selStartX) * (selEndY - selStartY) != 0f) {
+                    onSelection?.invoke(tf.first, tf.second, fq.first, fq.second)
+                }
+                performClick()
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean { super.performClick(); return true }
+
+    private fun yToFreq(yLo: Float, yHi: Float): Pair<Double, Double> {
+        val wfTop = height * 0.46f
+        val wfBottom = height.toFloat()
+        val span = (wfBottom - wfTop).coerceAtLeast(1f)
+        // top = high freq, bottom = low freq
+        val fracHi = (1f - (yLo - wfTop) / span).coerceIn(0f, 1f)
+        val fracLo = (1f - (yHi - wfTop) / span).coerceIn(0f, 1f)
+        val nyq = sampleRate / 2.0
+        return (fracLo * nyq) to (fracHi * nyq)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -126,59 +199,42 @@ class SpectrumAnalyzerView @JvmOverloads constructor(
         val h = height.toFloat()
         canvas.drawColor(0xFF0F0A18.toInt())
         if (!haveData) {
-            paintAxisText.textSize = dp(11f)
             canvas.drawText("waiting for signal…", dp(10f), h / 2f, paintAxisText)
-            paintAxisText.textSize = dp(9f)
             return
         }
 
-        val spectrumH = h * 0.52f
-        val waterfallTop = spectrumH + dp(4f)
-        val axisH = dp(14f)
-        val waterfallBottom = h - axisH
-        val waterfallH = (waterfallBottom - waterfallTop).coerceAtLeast(1f)
+        val spectrumH = h * 0.42f
+        val wfTop = h * 0.46f
+        val wfBottom = h - dp(4f)
 
-        drawGrid(canvas, w, spectrumH, waterfallTop, waterfallBottom)
         drawSpectrum(canvas, w, spectrumH)
-        drawWaterfall(canvas, w, waterfallTop, waterfallH)
-        drawFrequencyAxis(canvas, w, h, axisH)
+        drawWaterfall(canvas, w, wfTop, wfBottom)
+        drawAxes(canvas, w, h, spectrumH, wfTop, wfBottom)
+        drawSelection(canvas, wfTop)
         drawPeakMarker(canvas, w, spectrumH)
     }
 
-    private fun drawGrid(canvas: Canvas, w: Float, spectrumH: Float, wfTop: Float, wfBottom: Float) {
-        // Frequency grid (5 verticals)
-        for (i in 1 until 5) {
-            val x = w * i / 5f
-            canvas.drawLine(x, 0f, x, spectrumH, paintGrid)
-            canvas.drawLine(x, wfTop, x, wfBottom, paintGrid)
-        }
-        // Amplitude grid (4 horizontals in the spectrum)
-        for (i in 1 until 4) {
-            val y = spectrumH * i / 4f
-            canvas.drawLine(0f, y, w, y, paintGrid)
-        }
-    }
-
     private fun drawSpectrum(canvas: Canvas, w: Float, spectrumH: Float) {
-        spectrumPath.reset()
-        peakPath.reset()
+        // grid
+        for (i in 1 until 4) canvas.drawLine(0f, spectrumH * i / 4f, w, spectrumH * i / 4f, paintGrid)
+        for (i in 1 until 5) canvas.drawLine(w * i / 5f, 0f, w * i / 5f, spectrumH, paintGrid)
+
+        spectrumPath.reset(); peakPath.reset()
         spectrumPath.moveTo(0f, spectrumH)
         peakPath.moveTo(0f, spectrumH - peakHold[0] * spectrumH)
-        for (c in 0 until COLS) {
-            val x = w * c / (COLS - 1).toFloat()
-            spectrumPath.lineTo(x, spectrumH - current[c] * spectrumH)
-            peakPath.lineTo(x, spectrumH - peakHold[c] * spectrumH)
+        for (b in 0 until BANDS) {
+            val x = w * b / (BANDS - 1).toFloat()
+            spectrumPath.lineTo(x, spectrumH - spectrum[b] * spectrumH)
+            peakPath.lineTo(x, spectrumH - peakHold[b] * spectrumH)
         }
-        spectrumPath.lineTo(w, spectrumH)
-        spectrumPath.close()
+        spectrumPath.lineTo(w, spectrumH); spectrumPath.close()
 
         if (spectrumGradient == null || gradientW != w) {
             gradientW = w
             spectrumGradient = LinearGradient(
                 0f, 0f, 0f, spectrumH,
                 intArrayOf(0xFFFF4F00.toInt(), 0xFF12F012.toInt(), 0xFF00D1FF.toInt(), 0xFF370150.toInt()),
-                floatArrayOf(0f, 0.35f, 0.7f, 1f),
-                Shader.TileMode.CLAMP
+                floatArrayOf(0f, 0.35f, 0.7f, 1f), Shader.TileMode.CLAMP
             )
         }
         paintSpectrum.shader = spectrumGradient
@@ -189,51 +245,69 @@ class SpectrumAnalyzerView @JvmOverloads constructor(
         canvas.drawPath(peakPath, paintPeakHold)
     }
 
-    private fun drawWaterfall(canvas: Canvas, w: Float, top: Float, height: Float) {
+    private fun drawWaterfall(canvas: Canvas, w: Float, top: Float, bottom: Float) {
         val b = ensureBitmap()
-        // Build pixel colors from magnitudes.
-        for (r in 0 until ROWS) {
-            val rowBase = r * COLS
-            for (c in 0 until COLS) {
-                pixels[rowBase + c] = colorFor(waterfall[rowBase + c])
+        // Bitmap: row 0 (top) = highest band; column = time (newest right).
+        for (t in 0 until HISTORY) {
+            val colBase = t * BANDS
+            for (bnd in 0 until BANDS) {
+                val mag = hist[colBase + bnd]
+                val row = BANDS - 1 - bnd
+                pixels[row * HISTORY + t] = colorFor(mag)
             }
         }
-        b.setPixels(pixels, 0, COLS, 0, 0, COLS, ROWS)
-        val rect = android.graphics.RectF(0f, top, w, top + height)
-        canvas.drawBitmap(b, null, rect, null)
+        b.setPixels(pixels, 0, HISTORY, 0, 0, HISTORY, BANDS)
+        canvas.drawBitmap(b, null, RectF(0f, top, w, bottom), null)
     }
 
     private fun ensureBitmap(): Bitmap {
         val cur = bmp
-        if (cur != null && cur.width == COLS && cur.height == ROWS) return cur
-        val created = Bitmap.createBitmap(COLS, ROWS, Bitmap.Config.ARGB_8888)
+        if (cur != null && cur.width == HISTORY && cur.height == BANDS) return cur
+        val created = Bitmap.createBitmap(HISTORY, BANDS, Bitmap.Config.ARGB_8888)
         bmp = created
         return created
     }
 
-    private fun drawFrequencyAxis(canvas: Canvas, w: Float, h: Float, axisH: Float) {
-        val nyquist = sampleRate / 2.0
+    private fun drawAxes(canvas: Canvas, w: Float, h: Float, spectrumH: Float, wfTop: Float, wfBottom: Float) {
+        // Frequency labels for the spectrum (X) and the waterfall (Y).
+        val nyq = sampleRate / 2.0
         for (i in 0..4) {
             val frac = i / 4f
-            val hz = nyquist * frac
+            val hz = nyq * frac
             val label = if (hz >= 1000) "${(hz / 1000).toInt()}k" else "${hz.toInt()}"
-            val x = (w * frac).coerceIn(0f, w - dp(18f))
-            canvas.drawLine(w * frac, h - axisH, w * frac, h - axisH + dp(3f), paintGrid)
-            canvas.drawText(label, x, h - dp(3f), paintAxisText)
+            canvas.drawText(label, (w * frac).coerceIn(0f, w - dp(18f)), spectrumH + dp(9f), paintAxisText)
         }
+        // Waterfall Y frequency labels (right edge)
+        for (i in 0..4) {
+            val frac = i / 4f
+            val hz = nyq * frac
+            val label = if (hz >= 1000) "${(hz / 1000).toInt()}k" else "${hz.toInt()}"
+            val y = (wfBottom - (wfBottom - wfTop) * frac).coerceIn(wfTop + dp(9f), wfBottom)
+            canvas.drawText(label, dp(3f), y, paintAxisText)
+        }
+    }
+
+    private fun drawSelection(canvas: Canvas, wfTop: Float) {
+        if (selStartX < 0f) return
+        val left = min(selStartX, selEndX)
+        val top = min(selStartY, selEndY).coerceAtLeast(wfTop)
+        val right = max(selStartX, selEndX)
+        val bottom = max(selStartY, selEndY)
+        if (right - left < dp(2f) || bottom - top < dp(2f)) return
+        val rect = RectF(left, top, right, bottom)
+        canvas.drawRect(rect, paintSelFill)
+        canvas.drawRect(rect, paintSelBorder)
     }
 
     private fun drawPeakMarker(canvas: Canvas, w: Float, spectrumH: Float) {
         if (peakLevel < 0.02f) return
-        val nyquist = sampleRate / 2.0
-        val x = (peakHz / nyquist * w).toFloat().coerceIn(0f, w)
+        val x = (peakHz / (sampleRate / 2.0) * w).toFloat().coerceIn(0f, w)
         canvas.drawLine(x, 0f, x, spectrumH, paintMarker)
         val label = if (peakHz >= 1000) String.format("%.2f kHz", peakHz / 1000.0) else String.format("%.0f Hz", peakHz)
         val tx = if (x > w * 0.7f) x - dp(64f) else x + dp(3f)
         canvas.drawText(label, tx, dp(11f), paintMarker)
     }
 
-    /** SRP-fused waterfall color: dark → violet → cyan → green → hunter orange. */
     private fun colorFor(v: Float): Int {
         val t = v.coerceIn(0f, 1f)
         return when {
