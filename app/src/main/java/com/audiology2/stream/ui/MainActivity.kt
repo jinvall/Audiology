@@ -1853,7 +1853,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         gain: Double,
         invert: Boolean = false,
         mix: Double = 1.0,
-        master: Boolean = false
+        master: Boolean = false,
+        diff: Boolean = false
     ): EditResult? {
         val src = clipEditor.readClipAudio(clip) ?: return null
         if (src.frames == 0) return null
@@ -1893,7 +1894,33 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 val g = if (target) gain else 1.0
                 1.0 + (g - 1.0) * wet
             }
-            val masked = com.audiology2.stream.dsp.SpectralTransform.applyMask(frames, fft, sr, mask)
+            val masked: Array<com.audiology2.stream.dsp.SpectralFrame> = if (diff) {
+                // Spectral DIFFERENCE: reference = mean magnitude per bin over
+                // the whole clip; keep only what differs from it in the region.
+                val binsN = frames.firstOrNull()?.magnitude?.size ?: (fft / 2)
+                val ref = FloatArray(binsN)
+                for (f in frames) {
+                    val n = minOf(binsN, f.magnitude.size)
+                    for (k in 0 until n) ref[k] += f.magnitude[k]
+                }
+                val inv = 1f / frames.size.coerceAtLeast(1)
+                for (k in ref.indices) ref[k] *= inv
+                frames.mapIndexed { fi, f ->
+                    val m = FloatArray(f.magnitude.size)
+                    for (k in f.magnitude.indices) {
+                        val inTime = fi in frameStart until frameEnd
+                        val selected = if (master) inTime else (inTime && k in binMin..binMax)
+                        val target = if (invert) !selected else selected
+                        m[k] = if (target) {
+                            val d = f.magnitude[k] - ref.getOrElse(k) { 0f } * wet.toFloat()
+                            d.coerceAtLeast(0f) * gain.toFloat()
+                        } else f.magnitude[k]
+                    }
+                    f.copy(magnitude = m)
+                }.toTypedArray()
+            } else {
+                com.audiology2.stream.dsp.SpectralTransform.applyMask(frames, fft, sr, mask)
+            }
             val recovered = com.audiology2.stream.dsp.SpectralTransform.istft(masked, fft, hop)
 
             // Write recovered channel back, trimmed to the same length.
@@ -1930,13 +1957,19 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         val gain = ConsoleMath.dbToLinear(binding.knobSpecGain.value.coerceIn(-60.0, 24.0))
         val invert = binding.specInvertSwitch.isChecked
         val master = binding.specMasterSwitch.isChecked
+        val diff = binding.specDiffSwitch.isChecked
         val mixAmt = binding.knobSpecMix.value
+
+        // Target the clip's timeline time-selection when one exists.
+        val rel = currentClipRelativeRange(clip)
+        val tStart = if (rel != null && clip.duration > 0) (rel.first / clip.duration).coerceIn(0.0, 1.0) else 0.0
+        val tEnd = if (rel != null && clip.duration > 0) (rel.second / clip.duration).coerceIn(0.0, 1.0) else 1.0
 
         val busy = java.util.concurrent.atomic.AtomicBoolean(false)
         if (!busy.compareAndSet(false, true)) return
         Toast.makeText(this, "Processing spectrum…", Toast.LENGTH_SHORT).show()
         editorScope.launch {
-            val result = runSpectralEdit(clip, band.first, band.second, 0.0, 1.0, gain, invert, mixAmt, master)
+            val result = runSpectralEdit(clip, band.first, band.second, tStart, tEnd, gain, invert, mixAmt, master, diff)
             busy.set(false)
             runOnUiThread {
                 if (result != null) {
