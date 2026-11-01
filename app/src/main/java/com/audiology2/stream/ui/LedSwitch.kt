@@ -61,6 +61,12 @@ class LedSwitch @JvmOverloads constructor(
 
     init {
         isClickable = true
+        // Read android:text from XML so it behaves like a labelled switch.
+        attrs?.let { a ->
+            val ta = context.obtainStyledAttributes(a, intArrayOf(android.R.attr.text))
+            label = ta.getString(0) ?: ""
+            ta.recycle()
+        }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

@@ -487,14 +487,14 @@
                 </LinearLayout>
             </HorizontalScrollView>
 
-            <androidx.appcompat.widget.SwitchCompat
+            <com.audiology2.stream.ui.LedSwitch
                 android:id="@+id/agcSwitch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/label_agc"
                 android:textColor="@color/srp_text" />
 
-            <androidx.appcompat.widget.SwitchCompat
+            <com.audiology2.stream.ui.LedSwitch
                 android:id="@+id/nsupSwitch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -533,7 +533,7 @@
                     android:paddingStart="6dp"
                     android:textColor="@color/srp_text_muted" />
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.audiology2.stream.ui.LedSwitch
                     android:id="@+id/hpfSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -573,7 +573,7 @@
                     android:paddingStart="6dp"
                     android:textColor="@color/srp_text_muted" />
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.audiology2.stream.ui.LedSwitch
                     android:id="@+id/lpfSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -621,7 +621,7 @@
                     android:textColor="@color/srp_text"
                     android:textColorHint="@color/srp_text_subtle" />
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.audiology2.stream.ui.LedSwitch
                     android:id="@+id/notchSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -686,7 +686,7 @@
                     android:textColor="@color/srp_text"
                     android:textColorHint="@color/srp_text_subtle" />
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.audiology2.stream.ui.LedSwitch
                     android:id="@+id/eqSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -779,7 +779,7 @@
                         android:textColor="@color/srp_text"
                         android:textColorHint="@color/srp_text_subtle" />
 
-                    <androidx.appcompat.widget.SwitchCompat
+                    <com.audiology2.stream.ui.LedSwitch
                         android:id="@+id/compSwitch"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -791,7 +791,7 @@
 
             </LinearLayout>
 
-            <androidx.appcompat.widget.SwitchCompat
+            <com.audiology2.stream.ui.LedSwitch
                 android:id="@+id/limiterSwitch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -807,7 +807,7 @@
                 android:gravity="center_vertical"
                 android:layout_marginTop="8dp">
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.audiology2.stream.ui.LedSwitch
                     android:id="@+id/echoSwitch"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -862,7 +862,7 @@
                 android:gravity="center_vertical"
                 android:layout_marginTop="6dp">
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.audiology2.stream.ui.LedSwitch
                     android:id="@+id/distSwitch"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -891,7 +891,7 @@
                 android:gravity="center_vertical"
                 android:layout_marginTop="6dp">
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.audiology2.stream.ui.LedSwitch
                     android:id="@+id/tremoloSwitch"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -926,7 +926,7 @@
                     android:textColorHint="@color/srp_text_subtle" />
             </LinearLayout>
 
-            <androidx.appcompat.widget.SwitchCompat
+            <com.audiology2.stream.ui.LedSwitch
                 android:id="@+id/abSwitch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

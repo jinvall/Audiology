@@ -322,14 +322,21 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             spin.onItemSelectedListener = spinnerListener
         }
 
-        // Switch listeners
+        // Switch listeners (Processing card uses LedSwitch console toggles)
         listOf(
             binding.reconnectSwitch, binding.maxSensitivitySwitch, binding.rawBypassSwitch,
             binding.agcSwitch, binding.nsupSwitch, binding.hpfSwitch, binding.lpfSwitch,
             binding.notchSwitch, binding.eqSwitch, binding.compSwitch, binding.limiterSwitch,
             binding.echoSwitch, binding.distSwitch, binding.tremoloSwitch,
             binding.abSwitch
-        ).forEach { sw -> sw.setOnCheckedChangeListener { _, _ -> if (!updatingViews) updateSettingsFromViews() } }
+        ).forEach { sw ->
+            when (sw) {
+                is androidx.appcompat.widget.SwitchCompat ->
+                    sw.setOnCheckedChangeListener { _, _ -> if (!updatingViews) updateSettingsFromViews() }
+                is LedSwitch ->
+                    sw.onCheckedChanged = { if (!updatingViews) updateSettingsFromViews() }
+            }
+        }
 
         // Gain rotary knob: -60..+60 dB
         binding.gainKnob.setOnValueChangeListener { value ->
