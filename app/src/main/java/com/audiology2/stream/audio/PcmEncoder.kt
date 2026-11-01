@@ -26,6 +26,9 @@ object PcmEncoder {
         var p = dstOffsetBytes
         for (i in 0 until frameCount * channels) {
             var v = src[i]
+            // Guard NaN/Inf (a bad DSP stage can emit them) so rounding never
+            // throws "Cannot round NaN value" on the capture thread.
+            if (!v.isFinite()) v = 0.0f
             // hard clip to [-1,1] to avoid overflow distortion
             if (v > 1.0f) v = 1.0f else if (v < -1.0f) v = -1.0f
             val s = (v * 32767.0f).roundToInt().coerceIn(-32768, 32767)

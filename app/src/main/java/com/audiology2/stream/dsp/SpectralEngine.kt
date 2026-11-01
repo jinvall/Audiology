@@ -139,6 +139,8 @@ object SpectralEngine {
 
     /** Convert a frequency to note name, MIDI number, and cents deviation. */
     fun noteFromFreq(freq: Double): NoteInfo {
+        // Guard non-finite/non-positive so roundToInt never throws.
+        if (!freq.isFinite() || freq <= 0.0) return NoteInfo(0, "--", 0)
         val midi = (69.0 + 12.0 * (log10(freq / 440.0) / log10(2.0))).roundToInt()
         val clamped = midi.coerceIn(0, 127)
         val exact = 440.0 * 2.0.pow((clamped - 69) / 12.0)

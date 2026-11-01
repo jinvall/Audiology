@@ -66,7 +66,7 @@ class SnapGrid(
     fun snap(time: Double): Double {
         return when (mode) {
             Mode.OFF -> time
-            Mode.SECONDS -> time.roundToInt().toDouble()
+            Mode.SECONDS -> if (time.isFinite()) time.roundToInt().toDouble() else 0.0
             Mode.FRAMES -> (time / frameDuration).roundToLong() * frameDuration
             Mode.BEATS -> (kotlin.math.round(time / beatDuration)) * beatDuration
             Mode.MEASURES -> (kotlin.math.round(time / measureDuration)) * measureDuration

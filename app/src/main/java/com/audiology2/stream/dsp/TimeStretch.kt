@@ -20,7 +20,7 @@ object TimeStretch {
      * `frames * ratio` frames.
      */
     fun resample(samples: FloatArray, channels: Int, ratio: Double): FloatArray {
-        if (ratio <= 0.0 || samples.isEmpty() || channels <= 0) return samples
+        if (!ratio.isFinite() || ratio <= 0.0 || samples.isEmpty() || channels <= 0) return samples.copyOf()
         if (ratio == 1.0) return samples.copyOf()
 
         val framesIn = samples.size / channels
@@ -47,7 +47,7 @@ object TimeStretch {
      * audio (playback becomes slower), ratio < 1 shortens it.
      */
     fun timeStretch(samples: FloatArray, channels: Int, ratio: Double): FloatArray {
-        if (ratio <= 0.0 || samples.isEmpty() || channels <= 0) return samples
+        if (!ratio.isFinite() || ratio <= 0.0 || samples.isEmpty() || channels <= 0) return samples
         if (ratio == 1.0) return samples.copyOf()
 
         // Analysis frame: ~50ms at 48k. Hop is 1/8 of the window.

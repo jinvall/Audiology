@@ -14,7 +14,7 @@ object Presets {
         Preset(
             name = "Maximum Sensitivity",
             settings = AppSettings(
-                network = NetworkConfig(transport = TransportType.UDP, sampleRate = 48000,
+                network = NetworkConfig(transport = TransportType.TCP, sampleRate = 48000,
                     channelMode = ChannelMode.MONO, pcmFormat = PcmFormat.PCM_16, packetMs = 30,
                     jitterMs = 60, autoReconnect = true),
                 capture = CaptureConfig(inputSource = InputSource.UNPROCESSED,
@@ -32,7 +32,7 @@ object Presets {
         Preset(
             name = "Low Latency",
             settings = AppSettings(
-                network = NetworkConfig(transport = TransportType.UDP, sampleRate = 48000,
+                network = NetworkConfig(transport = TransportType.TCP, sampleRate = 48000,
                     channelMode = ChannelMode.MONO, pcmFormat = PcmFormat.PCM_16, packetMs = 10,
                     jitterMs = 30, autoReconnect = true),
                 capture = CaptureConfig(inputSource = InputSource.DEFAULT,
@@ -45,7 +45,7 @@ object Presets {
         Preset(
             name = "Clean Monitoring",
             settings = AppSettings(
-                network = NetworkConfig(transport = TransportType.UDP, sampleRate = 44100,
+                network = NetworkConfig(transport = TransportType.TCP, sampleRate = 44100,
                     channelMode = ChannelMode.STEREO, pcmFormat = PcmFormat.PCM_16,
                     packetMs = 30, jitterMs = 80, autoReconnect = true),
                 capture = CaptureConfig(inputSource = InputSource.DEFAULT,
@@ -64,7 +64,7 @@ object Presets {
         Preset(
             name = "Speech Detail",
             settings = AppSettings(
-                network = NetworkConfig(transport = TransportType.UDP, sampleRate = 48000,
+                network = NetworkConfig(transport = TransportType.TCP, sampleRate = 48000,
                     channelMode = ChannelMode.MONO, pcmFormat = PcmFormat.PCM_16,
                     packetMs = 20, jitterMs = 60, autoReconnect = true),
                 capture = CaptureConfig(inputSource = InputSource.VOICE_COMMUNICATION,
@@ -82,7 +82,7 @@ object Presets {
         Preset(
             name = "Raw / Unprocessed",
             settings = AppSettings(
-                network = NetworkConfig(transport = TransportType.UDP, sampleRate = 48000,
+                network = NetworkConfig(transport = TransportType.TCP, sampleRate = 48000,
                     channelMode = ChannelMode.MONO, pcmFormat = PcmFormat.PCM_16,
                     packetMs = 30, jitterMs = 60, autoReconnect = true),
                 capture = CaptureConfig(inputSource = InputSource.UNPROCESSED,

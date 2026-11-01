@@ -1143,7 +1143,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     private fun updateMidiModeButton() {
         val drum = binding.pianoRollView.isDrumModeActive
-        binding.btnMidiMode.text = if (drum) "Drums \u2713" else "Piano \u2713"
+        binding.btnMidiMode.text = if (drum) "Drums" else "Piano"
     }
 
     private fun toggleMidiMode() {

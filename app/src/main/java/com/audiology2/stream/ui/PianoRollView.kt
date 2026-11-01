@@ -58,12 +58,12 @@ class PianoRollView @JvmOverloads constructor(
     private val rowHeight = 24f * resources.displayMetrics.density
 
     // ---- Paint ----
-    private val paintWhiteKey = Paint().apply { color = 0xFFF7F7F9.toInt() }
-    private val paintBlackKey = Paint().apply { color = 0xFFB9BAC4.toInt() }
-    private val paintBeatLine = Paint().apply { color = 0xFF2A2A35.toInt(); strokeWidth = 1.5f }
-    private val paintSubLine = Paint().apply { color = 0xFF232330.toInt(); strokeWidth = 1f }
-    private val paintMeasureLine = Paint().apply { color = 0xFF3C3C4C.toInt(); strokeWidth = 2f }
-    private val paintRulerBg = Paint().apply { color = 0xFF16161E.toInt() }
+    private val paintWhiteKey = Paint().apply { color = 0xFF1A1230.toInt() }   // dark roll surface
+    private val paintBlackKey = Paint().apply { color = 0xFF241640.toInt() }  // darker key band
+    private val paintBeatLine = Paint().apply { color = 0xFF3A2C5E.toInt(); strokeWidth = 1.5f }
+    private val paintSubLine = Paint().apply { color = 0xFF2A2144.toInt(); strokeWidth = 1f }
+    private val paintMeasureLine = Paint().apply { color = 0xFF5A4191.toInt(); strokeWidth = 2f }
+    private val paintRulerBg = Paint().apply { color = 0xFF160F28.toInt() }
     private val paintRulerText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; textSize = 11f * resources.displayMetrics.scaledDensity
     }
