@@ -137,11 +137,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         )
         initViews()
         setupExpandableSections()
+        // loadSettings() populates the fields, then auto-starts the monitor
+        // (after population, so validation sees the real port/host).
         loadSettings()
-        // Live monitor on launch: begin capture so the waveform, spectrogram
-        // and Spectral Tools are active immediately. If the mic permission is
-        // missing we ask (requestNeededPermissions) and start resumes on grant.
-        autoStartMonitor()
         requestNeededPermissions()
         
         // Initialize audio player
@@ -2590,6 +2588,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 updatingViews = true
                 applySettingsToViews(settings)
                 updatingViews = false
+                // Auto-start only AFTER the fields are populated - otherwise the
+                // empty port field parses to 0 and validation falsely rejects it.
+                autoStartMonitor()
             }
         }
     }
@@ -2747,7 +2748,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private fun readSettingsFromViews(): AppSettings {
         val v = binding
         val host = v.hostEdit.text?.toString()?.trim().orEmpty()
-        val port = v.portEdit.text.toString().toIntOrNull() ?: 0
+        val port = v.portEdit.text.toString().trim().toIntOrNull() ?: 0
         val sampleRate = v.sampleRateEdit.text.toString().toIntOrNull() ?: 48000
         val packetMs = v.packetMsEdit.text.toString().toIntOrNull() ?: 30
         val jitterMs = v.jitterMsEdit.text.toString().toIntOrNull() ?: 60
