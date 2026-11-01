@@ -245,6 +245,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 frames?.let { spectrogramFrames ->
                     binding.mainSpectrogramView.updateSpectrogram(spectrogramFrames, sr, fftProcessor.fftSize)
                     spectralCard.onFrame(spectrogramFrames, sr, fftProcessor.fftSize)
+                    // Spectroid-style analyzer (stores data + posts invalidate).
+                    spectrogramFrames.lastOrNull()?.let { latest ->
+                        binding.spectrumAnalyzerView.push(latest, sr, fftProcessor.fftSize)
+                    }
                 }
                 binding.mainSpectrogramView.postInvalidate()
             }
@@ -2594,6 +2598,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         // is visible immediately on launch.
         binding.contentEditor.visibility = View.VISIBLE
         binding.chevronEditor.text = "\u25B2"
+
+        // Open the Spectral card by default so the Spectroid-style analyzer is visible.
+        binding.contentSpectral.visibility = View.VISIBLE
+        binding.chevronSpectral.text = "\u25B2"
     }
 
     // ---- Settings load/save ----

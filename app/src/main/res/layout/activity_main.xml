@@ -1537,6 +1537,14 @@
             android:padding="10dp"
             android:visibility="gone">
 
+            <!-- Spectroid-style analyzer: spectrum + waterfall -->
+            <com.audiology2.stream.ui.SpectrumAnalyzerView
+                android:id="@+id/spectrumAnalyzerView"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/console_card_bg" />
+
             <TextView
                 android:id="@+id/spectralPitchLabel"
                 android:layout_width="match_parent"
