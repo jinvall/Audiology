@@ -557,6 +557,13 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.btnSpectralCapture.setOnClickListener { capturePitchToMidi() }
         binding.btnSpectralCopy.setOnClickListener { spectralCard.copyPeak() }
         binding.btnSpectralApply.setOnClickListener { applySpectralSelection() }
+        binding.spectralClipSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                spectralClips.getOrNull(position)?.let { loadClipSpectrum(it) }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        refreshClipSelector()
         setupAssistant()
         setupMidiEditor()
         
@@ -708,6 +715,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private fun refreshTimeline() {
         binding.trackTimelineView.setProject(ProjectManager.getCurrentProject())
         binding.trackTimelineView.postInvalidate()
+        refreshClipSelector()
     }
 
     private fun loadAssistantConfig() {
@@ -1968,19 +1976,55 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         return EditResult(file, src.frames.toDouble() / sr)
     }
 
+    /** Clips offered by the spectral clip selector. */
+    private var spectralClips: List<Clip> = emptyList()
+
+    /** Rebuild the clip selector from the current project's clips. */
+    private fun refreshClipSelector() {
+        val project = ProjectManager.getCurrentProject() ?: return
+        val clips = project.tracks.flatMap { t -> t.clips }
+        // Rebuild only when the clip set actually changed (avoid churn/selection loss).
+        if (clips.map { it.id } == spectralClips.map { it.id } &&
+            (binding.spectralClipSpinner.adapter?.count ?: 0) > 0) return
+        spectralClips = clips
+        val labels = clips.map { it.name }.ifEmpty { listOf("(no clips)") }
+        binding.spectralClipSpinner.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+    }
+
+    /** Render the chosen clip's STFT into the clip spectrogram view. */
+    private fun loadClipSpectrum(clip: Clip) {
+        editorScope.launch {
+            val buf = clipEditor.readClipAudio(clip) ?: return@launch
+            if (buf.frames == 0) return@launch
+            val mono = buf.mixdown()
+            val fft = com.audiology2.stream.dsp.SpectralTransform.DEFAULT_FFT
+            val hop = com.audiology2.stream.dsp.SpectralTransform.DEFAULT_HOP
+            val frames = com.audiology2.stream.dsp.SpectralTransform.stft(mono, fft, hop)
+                .map { it.magnitude }.toTypedArray()
+            runOnUiThread {
+                binding.clipSpectrumView.showFrames(frames, buf.sampleRate, fft)
+                binding.clipSpectrumView.clearSelection()
+            }
+        }
+    }
+
     /**
-     * Apply the spectral operations (gain / invert / mix / master) to the
-     * selected clip, using the analyzer's selected frequency band. With no
-     * band selected it applies across the full spectrum (master sweep).
+     * Apply the spectral operations to the selected clip. Uses the clip
+     * spectrogram's time x frequency selection when present, else the live
+     * analyzer band plus the clip's timeline selection.
      */
     private fun applySpectralSelection() {
-        val clip = requireSelectedClip("apply a spectral edit") ?: return
         val project = ProjectManager.getCurrentProject() ?: return
-        val analyzer = binding.spectrumAnalyzerView
-        val band = analyzer.selectionFreq ?: (0.0 to (project.sampleRate / 2.0))
-        if (analyzer.selectionFreq == null) {
-            Toast.makeText(this, "No region selected - applying to the full band", Toast.LENGTH_SHORT).show()
-        }
+        val clip = spectralClips.getOrNull(binding.spectralClipSpinner.selectedItemPosition)
+            ?: currentSelectionClip()
+            ?: run {
+                Toast.makeText(this, "Select a clip to edit", Toast.LENGTH_SHORT).show()
+                return
+            }
+        val band = binding.clipSpectrumView.selectionFreq
+            ?: binding.spectrumAnalyzerView.selectionFreq
+            ?: (0.0 to (project.sampleRate / 2.0))
         val gain = ConsoleMath.dbToLinear(binding.knobSpecGain.value.coerceIn(-60.0, 24.0))
         val invert = binding.specInvertSwitch.isChecked
         val master = binding.specMasterSwitch.isChecked
@@ -1989,10 +2033,13 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         val denoise = binding.specDenoiseSwitch.isChecked
         val mixAmt = binding.knobSpecMix.value
 
-        // Target the clip's timeline time-selection when one exists.
+        // Prefer the clip-spectrogram time selection, else the timeline range.
+        val ct = binding.clipSpectrumView.selectionTimeFraction
         val rel = currentClipRelativeRange(clip)
-        val tStart = if (rel != null && clip.duration > 0) (rel.first / clip.duration).coerceIn(0.0, 1.0) else 0.0
-        val tEnd = if (rel != null && clip.duration > 0) (rel.second / clip.duration).coerceIn(0.0, 1.0) else 1.0
+        val tStart = ct?.first?.toDouble()
+            ?: if (rel != null && clip.duration > 0) (rel.first / clip.duration).coerceIn(0.0, 1.0) else 0.0
+        val tEnd = ct?.second?.toDouble()
+            ?: if (rel != null && clip.duration > 0) (rel.second / clip.duration).coerceIn(0.0, 1.0) else 1.0
 
         val busy = java.util.concurrent.atomic.AtomicBoolean(false)
         if (!busy.compareAndSet(false, true)) return

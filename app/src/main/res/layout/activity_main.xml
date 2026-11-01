@@ -1545,6 +1545,31 @@
                 android:layout_marginBottom="8dp"
                 android:background="@drawable/console_card_bg" />
 
+            <!-- Clip selector + the selected clip's spectrogram (for editing) -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EDIT CLIP"
+                android:textColor="@color/srp_text_subtle"
+                android:textSize="10sp"
+                android:letterSpacing="0.2"
+                android:fontFamily="monospace"
+                android:paddingStart="2dp" />
+
+            <Spinner
+                android:id="@+id/spectralClipSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:spinnerMode="dropdown" />
+
+            <com.audiology2.stream.ui.SpectrumAnalyzerView
+                android:id="@+id/clipSpectrumView"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/console_card_bg" />
+
             <!-- Spectral operations on the selected region / clip -->
             <LinearLayout
                 android:layout_width="match_parent"

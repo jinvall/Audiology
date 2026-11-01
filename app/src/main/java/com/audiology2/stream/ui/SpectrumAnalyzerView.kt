@@ -113,12 +113,59 @@ class SpectrumAnalyzerView @JvmOverloads constructor(
     private var spectrumGradient: LinearGradient? = null
     private var gradientW = 0f
 
+    private var staticMode = false
+
+    /** Feed a live frame (scrolling). Ignored while in static clip mode. */
     fun push(frame: FloatArray, sr: Int, ffts: Int) {
-        if (frame.isEmpty()) return
+        if (staticMode || frame.isEmpty()) return
         sampleRate = sr
         fftSize = ffts
         binCount = frame.size
+        applySpectrumFrame(frame)
+        // Scroll the lateral waterfall left; write the newest column at the right.
+        System.arraycopy(hist, BANDS, hist, 0, BANDS * (HISTORY - 1))
+        System.arraycopy(spectrum, 0, hist, BANDS * (HISTORY - 1), BANDS)
+        haveData = true
+        postInvalidateOnAnimation()
+    }
 
+    /** Show a whole clip's STFT as a static lateral image (time X, freq Y). */
+    fun showFrames(frames: Array<FloatArray>, sr: Int, fftSize: Int) {
+        if (frames.isEmpty()) return
+        staticMode = true
+        this.sampleRate = sr
+        this.fftSize = fftSize
+        binCount = frames.first().size
+        val n = frames.size
+        val group = max(1, binCount / BANDS)
+        for (t in 0 until HISTORY) {
+            val fi = ((t.toLong() * n) / HISTORY).toInt().coerceIn(0, n - 1)
+            val frame = frames[fi]
+            val base = t * BANDS
+            for (b in 0 until BANDS) {
+                val s = b * group
+                if (s >= binCount) { hist[base + b] = 0f; continue }
+                val e = ((b + 1) * group).coerceAtMost(binCount)
+                var m = 0f
+                for (i in s until e) if (frame[i] > m) m = frame[i]
+                hist[base + b] = m
+            }
+        }
+        val meanFrame = FloatArray(binCount)
+        for (f in frames) {
+            val k2 = minOf(binCount, f.size)
+            for (k in 0 until k2) meanFrame[k] += f[k]
+        }
+        for (k in meanFrame.indices) meanFrame[k] /= n.toFloat()
+        applySpectrumFrame(meanFrame)
+        haveData = true
+        postInvalidate()
+    }
+
+    /** Return to live scrolling. */
+    fun setLiveMode() { staticMode = false }
+
+    private fun applySpectrumFrame(frame: FloatArray) {
         // Downsample spectrum to BANDS (freq) rows.
         val group = max(1, binCount / BANDS)
         for (b in 0 until BANDS) {
@@ -130,18 +177,11 @@ class SpectrumAnalyzerView @JvmOverloads constructor(
             spectrum[b] = m
             peakHold[b] = if (m >= peakHold[b]) m else (peakHold[b] - 0.015f).coerceAtLeast(m)
         }
-
         // Dominant partial (skip DC).
         var best = 1; var bestV = 0f
         for (i in 1 until binCount) if (frame[i] > bestV) { bestV = frame[i]; best = i }
         peakLevel = bestV
         peakHz = best.toDouble() * sampleRate / fftSize
-
-        // Scroll the lateral waterfall left; write the newest column at the right.
-        System.arraycopy(hist, BANDS, hist, 0, BANDS * (HISTORY - 1))
-        System.arraycopy(spectrum, 0, hist, BANDS * (HISTORY - 1), BANDS)
-        haveData = true
-        postInvalidateOnAnimation()
     }
 
     // ---- Touch: select a region on the waterfall ----
