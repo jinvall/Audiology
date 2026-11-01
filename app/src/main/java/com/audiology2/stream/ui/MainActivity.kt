@@ -556,6 +556,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         binding.trackTimelineView.onMidiClipTap = { midi -> openMidiEditor(midi) }
         binding.btnSpectralCapture.setOnClickListener { capturePitchToMidi() }
         binding.btnSpectralCopy.setOnClickListener { spectralCard.copyPeak() }
+        binding.btnSpectralApply.setOnClickListener { applySpectralSelection() }
         setupAssistant()
         setupMidiEditor()
         
@@ -1849,7 +1850,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         freqMaxHz: Double,
         timeStart: Double,
         timeEnd: Double,
-        gain: Double
+        gain: Double,
+        invert: Boolean = false,
+        mix: Double = 1.0,
+        master: Boolean = false
     ): EditResult? {
         val src = clipEditor.readClipAudio(clip) ?: return null
         if (src.frames == 0) return null
@@ -1875,9 +1879,20 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             val frameEnd = (timeEnd.coerceIn(0.0, 1.0) * frames.size).toInt().coerceIn(frameStart, frames.size)
             if (frameEnd <= frameStart) continue
 
-            val mask = com.audiology2.stream.dsp.SpectralTransform.rectangularMask(
-                frames.size, fft, sr, frameStart, frameEnd, freqMinHz, freqMaxHz, gain
-            )
+            val binMin = (freqMinHz * fft / sr).toInt().coerceIn(0, fft / 2)
+            val binMax = (freqMaxHz * fft / sr).toInt().coerceIn(binMin, fft / 2)
+            val wet = mix.coerceIn(0.0, 1.0)
+            // Operation semantics:
+            //  - master: operate on the full band (ignore the freq bounds)
+            //  - invert: apply the gain OUTSIDE the selection instead of inside
+            //  - mix: wet/dry blend (1.0 = fully processed, 0.0 = original)
+            val mask: (Int, Int, Double) -> Double = { fi, k, _ ->
+                val inTime = fi in frameStart until frameEnd
+                val selected = if (master) inTime else (inTime && k in binMin..binMax)
+                val target = if (invert) !selected else selected
+                val g = if (target) gain else 1.0
+                1.0 + (g - 1.0) * wet
+            }
             val masked = com.audiology2.stream.dsp.SpectralTransform.applyMask(frames, fft, sr, mask)
             val recovered = com.audiology2.stream.dsp.SpectralTransform.istft(masked, fft, hop)
 
@@ -1897,6 +1912,47 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         val buf = com.audiology2.stream.audio.AudioBuffer(outSamples, sr, ch, src.frames)
         if (!com.audiology2.stream.audio.WavUtils.write(file, buf)) return null
         return EditResult(file, src.frames.toDouble() / sr)
+    }
+
+    /**
+     * Apply the spectral operations (gain / invert / mix / master) to the
+     * selected clip, using the analyzer's selected frequency band. With no
+     * band selected it applies across the full spectrum (master sweep).
+     */
+    private fun applySpectralSelection() {
+        val clip = requireSelectedClip("apply a spectral edit") ?: return
+        val project = ProjectManager.getCurrentProject() ?: return
+        val analyzer = binding.spectrumAnalyzerView
+        val band = analyzer.selectionFreq ?: (0.0 to (project.sampleRate / 2.0))
+        if (analyzer.selectionFreq == null) {
+            Toast.makeText(this, "No region selected - applying to the full band", Toast.LENGTH_SHORT).show()
+        }
+        val gain = ConsoleMath.dbToLinear(binding.knobSpecGain.value.coerceIn(-60.0, 24.0))
+        val invert = binding.specInvertSwitch.isChecked
+        val master = binding.specMasterSwitch.isChecked
+        val mixAmt = binding.knobSpecMix.value
+
+        val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+        if (!busy.compareAndSet(false, true)) return
+        Toast.makeText(this, "Processing spectrum…", Toast.LENGTH_SHORT).show()
+        editorScope.launch {
+            val result = runSpectralEdit(clip, band.first, band.second, 0.0, 1.0, gain, invert, mixAmt, master)
+            busy.set(false)
+            runOnUiThread {
+                if (result != null) {
+                    val updated = ProjectManager.updateCurrentProject { p ->
+                        val track = p.getTrack(clip.trackId) ?: return@updateCurrentProject p
+                        p.updateTrack(track.updateClip(clip.copy(sourcePath = result.outputFile.absolutePath)))
+                    }
+                    binding.trackTimelineView.setProject(updated)
+                    binding.trackTimelineView.postInvalidate()
+                    binding.spectrumAnalyzerView.clearSelection()
+                    Toast.makeText(this@MainActivity, "Spectral edit applied", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Spectral edit failed", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     // ===== Record → beat sample =====
@@ -2635,6 +2691,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         bindKnob(binding.knobDistDrive, binding.distDriveEdit, 0.0, 30.0, 1.0, "", "DRIVE", 0)
         bindKnob(binding.knobTremRate, binding.tremoloRateEdit, 0.1, 20.0, 0.1, "Hz", "RATE", 1)
         bindKnob(binding.knobTremDepth, binding.tremoloDepthEdit, 0.0, 1.0, 0.01, "", "DEPTH", 2)
+        // Spectral operations (read on Apply; no field link).
+        binding.knobSpecGain.apply { minValue = -60.0; maxValue = 24.0; step = 1.0; unit = "dB"; label = "GAIN" }
+        binding.knobSpecMix.apply { minValue = 0.0; maxValue = 1.0; step = 0.01; unit = ""; label = "MIX" }
     }
 
     /** Configure one knob and link its value to a (hidden) numeric field. */
