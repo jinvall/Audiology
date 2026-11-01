@@ -261,9 +261,6 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private fun initViews() {
         binding.startBtn.setOnClickListener { startWithInputSource() }
         binding.stopBtn.setOnClickListener { stopStreaming() }
-        // System-wide transport (always-visible status bar).
-        binding.startBtnTop.setOnClickListener { startWithInputSource() }
-        binding.stopBtnTop.setOnClickListener { stopStreaming() }
         binding.reconnectSwitch.isChecked = true
 
         // Spinner adapters (one per array)
@@ -2599,13 +2596,35 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     /** Configure the Processing-card console knobs and sync them to the fields. */
     private fun setupConsoleKnobs() {
-        binding.knobEqGain.apply { minValue = -24.0; maxValue = 24.0; step = 1.0; unit = "dB"; label = "EQ" }
-        binding.knobCompThresh.apply { minValue = -60.0; maxValue = 0.0; step = 1.0; unit = "dB"; label = "THR" }
-        binding.knobEchoMix.apply { minValue = 0.0; maxValue = 1.0; step = 0.01; unit = ""; label = "MIX" }
-        // Knob -> field (the TextWatcher then persists via updateSettingsFromViews).
-        binding.knobEqGain.onValueChanged = { v -> binding.eqGainEdit.setText(fmtKnob(v, 1)) }
-        binding.knobCompThresh.onValueChanged = { v -> binding.compThreshEdit.setText(fmtKnob(v, 0)) }
-        binding.knobEchoMix.onValueChanged = { v -> binding.echoMixEdit.setText(fmtKnob(v, 2)) }
+        // knob, field, min, max, step, unit, label, decimals
+        bindKnob(binding.knobHpfHz, binding.hpfHzEdit, 20.0, 500.0, 1.0, "Hz", "HPF", 0)
+        bindKnob(binding.knobLpfHz, binding.lpfHzEdit, 500.0, 20000.0, 100.0, "Hz", "LPF", 0)
+        bindKnob(binding.knobNotchHz, binding.notchHzEdit, 20.0, 500.0, 1.0, "Hz", "NOTCH", 0)
+        bindKnob(binding.knobEqHz, binding.eqHzEdit, 100.0, 8000.0, 10.0, "Hz", "EQ", 0)
+        bindKnob(binding.knobEqGain, binding.eqGainEdit, -24.0, 24.0, 1.0, "dB", "GAIN", 1)
+        bindKnob(binding.knobEqBw, binding.eqBwEdit, 0.1, 4.0, 0.1, "", "BW", 1)
+        bindKnob(binding.knobCompThresh, binding.compThreshEdit, -60.0, 0.0, 1.0, "dB", "THR", 0)
+        bindKnob(binding.knobCompRatio, binding.compRatioEdit, 1.0, 20.0, 0.5, ":1", "RATIO", 1)
+        bindKnob(binding.knobEchoDelay, binding.echoDelayEdit, 20.0, 1000.0, 10.0, "ms", "DELAY", 0)
+        bindKnob(binding.knobEchoMix, binding.echoMixEdit, 0.0, 1.0, 0.01, "", "MIX", 2)
+        bindKnob(binding.knobDistDrive, binding.distDriveEdit, 0.0, 30.0, 1.0, "", "DRIVE", 0)
+        bindKnob(binding.knobTremRate, binding.tremoloRateEdit, 0.1, 20.0, 0.1, "Hz", "RATE", 1)
+        bindKnob(binding.knobTremDepth, binding.tremoloDepthEdit, 0.0, 1.0, 0.01, "", "DEPTH", 2)
+    }
+
+    /** Configure one knob and link its value to a (hidden) numeric field. */
+    private fun bindKnob(
+        knob: KnobView,
+        field: android.widget.EditText,
+        min: Double, max: Double, step: Double,
+        unit: String, label: String, decimals: Int
+    ) {
+        knob.minValue = min
+        knob.maxValue = max
+        knob.step = step
+        knob.unit = unit
+        knob.label = label
+        knob.onValueChanged = { v -> field.setText(fmtKnob(v, decimals)) }
     }
 
     private fun fmtKnob(v: Double, decimals: Int): String =
@@ -2613,9 +2632,19 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
     private fun applySettingsToViews(s: AppSettings) {
         // Console knobs mirror the loaded settings (silent: no listener loop).
+        binding.knobHpfHz.setValueSilently(s.dsp.highPassHz.toDouble())
+        binding.knobLpfHz.setValueSilently(s.dsp.lowPassHz.toDouble())
+        binding.knobNotchHz.setValueSilently(s.dsp.notchHz)
+        binding.knobEqHz.setValueSilently(s.dsp.eqHz.toDouble())
         binding.knobEqGain.setValueSilently(s.dsp.eqGainDb)
+        binding.knobEqBw.setValueSilently(s.dsp.eqBwOctaves)
         binding.knobCompThresh.setValueSilently(s.dsp.compThresholdDb)
+        binding.knobCompRatio.setValueSilently(s.dsp.compRatio)
+        binding.knobEchoDelay.setValueSilently(s.dsp.echoDelayMs)
         binding.knobEchoMix.setValueSilently(s.dsp.echoMix)
+        binding.knobDistDrive.setValueSilently(s.dsp.distortionDrive)
+        binding.knobTremRate.setValueSilently(s.dsp.tremoloRateHz)
+        binding.knobTremDepth.setValueSilently(s.dsp.tremoloDepth)
         // Only update text fields if value actually changed to avoid cursor jumps
         val currentHost = binding.hostEdit.text.toString()
         if (currentHost != s.network.host) binding.hostEdit.setText(s.network.host)

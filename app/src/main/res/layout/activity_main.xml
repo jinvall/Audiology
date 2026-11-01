@@ -50,28 +50,6 @@
             android:text="host:port"
             android:textColor="@color/srp_text_muted"
             android:paddingStart="8dp" />
-
-        <!-- System-wide transport: always visible, no need to open a card -->
-        <Button
-            android:id="@+id/startBtnTop"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:text="START"
-            android:textColor="@color/md_theme_dark_onPrimary"
-            android:backgroundTint="@color/srp_primary" />
-
-        <Button
-            android:id="@+id/stopBtnTop"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:minWidth="0dp"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:text="STOP" />
     </LinearLayout>
 
     <!-- Scroll container is a fallback: the panels below collapse by default, so
@@ -444,24 +422,23 @@
             android:padding="8dp"
             android:visibility="gone">
 
-            <!-- Console knob strip (two-way synced to the fields below) -->
+            <!-- Console: knob grid (two-way synced to the fields below) -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="CONSOLE"
+                android:text="FILTERS"
                 android:textColor="@color/srp_text_subtle"
                 android:textSize="10sp"
                 android:letterSpacing="0.2"
                 android:fontFamily="monospace"
-                android:paddingStart="2dp"
-                android:paddingBottom="2dp" />
+                android:paddingStart="2dp" />
 
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:scrollbars="none"
                 android:background="@drawable/console_card_bg"
-                android:padding="6dp">
+                android:padding="4dp">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -469,21 +446,153 @@
                     android:orientation="horizontal">
 
                     <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobHpfHz"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobLpfHz"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobNotchHz"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EQ"
+                android:textColor="@color/srp_text_subtle"
+                android:textSize="10sp"
+                android:letterSpacing="0.2"
+                android:fontFamily="monospace"
+                android:paddingStart="2dp"
+                android:paddingTop="4dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:background="@drawable/console_card_bg"
+                android:padding="4dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobEqHz"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp" />
+
+                    <com.audiology2.stream.ui.KnobView
                         android:id="@+id/knobEqGain"
-                        android:layout_width="88dp"
-                        android:layout_height="108dp" />
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobEqBw"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="COMP"
+                android:textColor="@color/srp_text_subtle"
+                android:textSize="10sp"
+                android:letterSpacing="0.2"
+                android:fontFamily="monospace"
+                android:paddingStart="2dp"
+                android:paddingTop="4dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:background="@drawable/console_card_bg"
+                android:padding="4dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
 
                     <com.audiology2.stream.ui.KnobView
                         android:id="@+id/knobCompThresh"
-                        android:layout_width="88dp"
-                        android:layout_height="108dp"
-                        android:layout_marginStart="6dp" />
+                        android:layout_width="84dp"
+                        android:layout_height="104dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobCompRatio"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SPACE / DRIVE"
+                android:textColor="@color/srp_text_subtle"
+                android:textSize="10sp"
+                android:letterSpacing="0.2"
+                android:fontFamily="monospace"
+                android:paddingStart="2dp"
+                android:paddingTop="4dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:background="@drawable/console_card_bg"
+                android:padding="4dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobEchoDelay"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp" />
 
                     <com.audiology2.stream.ui.KnobView
                         android:id="@+id/knobEchoMix"
-                        android:layout_width="88dp"
-                        android:layout_height="108dp"
-                        android:layout_marginStart="6dp" />
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobDistDrive"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobTremRate"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
+
+                    <com.audiology2.stream.ui.KnobView
+                        android:id="@+id/knobTremDepth"
+                        android:layout_width="84dp"
+                        android:layout_height="104dp"
+                        android:layout_marginStart="4dp" />
                 </LinearLayout>
             </HorizontalScrollView>
 
@@ -514,6 +623,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                     android:id="@+id/hpfHzEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -554,6 +664,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                     android:id="@+id/lpfHzEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -594,6 +705,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                     android:id="@+id/notchHzEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -642,6 +754,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                     android:id="@+id/eqHzEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -658,6 +771,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                     android:id="@+id/eqGainEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -675,6 +789,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                     android:id="@+id/eqBwEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -712,6 +827,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                         android:id="@+id/compThreshEdit"
+                        android:visibility="gone"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
@@ -728,6 +844,7 @@
                 android:cursorVisible="true"
                 android:privateImeOptions="textDirection=ltr"
                         android:id="@+id/compRatioEdit"
+                        android:visibility="gone"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
@@ -817,6 +934,7 @@
 
                 <EditText
                     android:id="@+id/echoDelayEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -843,6 +961,7 @@
 
                 <EditText
                     android:id="@+id/echoMixEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -872,6 +991,7 @@
 
                 <EditText
                     android:id="@+id/distDriveEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="3"
@@ -901,6 +1021,7 @@
 
                 <EditText
                     android:id="@+id/tremoloRateEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="2"
@@ -914,6 +1035,7 @@
 
                 <EditText
                     android:id="@+id/tremoloDepthEdit"
+                    android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="2"
