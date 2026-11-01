@@ -164,6 +164,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     private var monitorTrack: android.media.AudioTrack? = null
     private var monitorShortBuf = ShortArray(0)
 
+    // Audio routing: preferred output device for monitoring + playback.
+    private var preferredOutputDevice: android.media.AudioDeviceInfo? = null
+
     private val permissionContract =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
             val micGranted = perms[android.Manifest.permission.RECORD_AUDIO] != false
@@ -370,6 +373,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
         // Input monitoring (mic -> speaker).
         binding.monitorSwitch.onCheckedChanged = { on -> setInputMonitor(on) }
+
+// Audio routing (output device for monitoring + playback).
+        binding.audioRouteSpinner.onSELListener = { parent, view, position, _ -> applyAudioRoute(position) }
+
 
         // Gain rotary knob: -60..+60 dB
         binding.gainKnob.setOnValueChangeListener { value ->
@@ -2431,6 +2438,10 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 android.media.AudioTrack.MODE_STREAM
             )
             at.play()
+            // Apply the selected output route (speaker/earpiece/wired/BT).
+            if (Build.VERSION.SDK_INT >= 23) {
+                runCatching { at.setPreferredDevice(preferredOutputDevice) }
+            }
             monitorTrack = at
             at
         } catch (e: Exception) {
@@ -2449,6 +2460,37 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         } else {
             Toast.makeText(this, "Monitoring input - use headphones to avoid feedback", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** Choose the output route (Default/Speaker/Earpiece/Wired/Bluetooth). */
+    private fun applyAudioRoute(position: Int) {
+        if (Build.VERSION.SDK_INT < 23) {
+            Toast.makeText(this, "Audio routing needs Android 6+", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val am = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        val outputs = am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+        val type = when (position) {
+            1 -> android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+            2 -> android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+            3 -> android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+            4 -> android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+            else -> -1
+        }
+        preferredOutputDevice = when (position) {
+            3 -> outputs.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES }
+                ?: outputs.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET }
+            else -> if (type < 0) null else outputs.firstOrNull { it.type == type }
+        }
+        runCatching { monitorTrack?.setPreferredDevice(preferredOutputDevice) }
+        audioPlayer.setPreferredOutputDevice(preferredOutputDevice)
+        if (position != 0) {
+            Toast.makeText(this, "Audio routing: ${audioRouteLabel(position)}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun audioRouteLabel(position: Int) = when (position) {
+        1 -> "Speaker"; 2 -> "Earpiece"; 3 -> "Wired"; 4 -> "Bluetooth"; else -> "Default"
     }
 
     private fun toggleRecording() {
