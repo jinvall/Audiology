@@ -2006,8 +2006,8 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
-                <!-- Spectrogram (toggleable) -->
-                <com.audiology2.stream.ui.SpectrogramView
+                <!-- Spectrogram (toggleable) - uses the working analyzer view -->
+                <com.audiology2.stream.ui.SpectrumAnalyzerView
                     android:id="@+id/mainSpectrogramView"
                     android:layout_width="match_parent"
                     android:layout_height="0dp"

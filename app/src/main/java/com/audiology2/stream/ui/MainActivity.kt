@@ -243,14 +243,13 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
 
                 val frames = fftProcessor.process(samples, framesRead, channels)
                 frames?.let { spectrogramFrames ->
-                    binding.mainSpectrogramView.updateSpectrogram(spectrogramFrames, sr, fftProcessor.fftSize)
+                    // Monitor spectrogram is now the working analyzer view.
+                    spectrogramFrames.forEach { binding.mainSpectrogramView.push(it, sr, fftProcessor.fftSize) }
                     spectralCard.onFrame(spectrogramFrames, sr, fftProcessor.fftSize)
-                    // Spectroid-style analyzer (stores data + posts invalidate).
                     spectrogramFrames.lastOrNull()?.let { latest ->
                         binding.spectrumAnalyzerView.push(latest, sr, fftProcessor.fftSize)
                     }
                 }
-                binding.mainSpectrogramView.postInvalidate()
             }
             service?.registerRecordingCallback(recordingCallback!!)
 
@@ -370,8 +369,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         // Initialize waveform view with live capture data
         binding.mainWaveformView.setTrackColor(0xFF00D4AA.toInt())
         
-        // Spectrogram view - use SRP spectral gradient
-        binding.mainSpectrogramView.setFrequencyRange(20.0, 20000.0)
+        // Spectrogram view (analyzer) - SRP spectral gradient handled internally.
 
         // Transport controls
         binding.btnPlay.setOnClickListener { togglePlayback() }
@@ -433,11 +431,15 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             binding.mainWaveformView.visibility = if (checked) View.VISIBLE else View.GONE
         }
         binding.switchSpectrogram.setOnCheckedChangeListener { _, checked ->
-            binding.mainSpectrogramView.onSelectionEnd = { (start, end) ->
-            createClipFromSpectrogramSelection(start, end)
-        }
-
-        binding.mainSpectrogramView.visibility = if (checked) View.VISIBLE else View.GONE
+            // Analyzer selection reports (timeLo, timeHi, freqLo, freqHi).
+            binding.mainSpectrogramView.onSelection = { _, _, fLo, fHi ->
+                Toast.makeText(
+                    this,
+                    String.format("Selection %.0f–%.0f Hz", fLo, fHi),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            binding.mainSpectrogramView.visibility = if (checked) View.VISIBLE else View.GONE
         }
 
         // Initialize track timeline
