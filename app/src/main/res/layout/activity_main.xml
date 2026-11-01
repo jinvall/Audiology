@@ -1872,28 +1872,31 @@
                 android:textSize="18sp"
                 android:fontFamily="monospace" />
 
-            <!-- Track list / timeline area -->
-            <FrameLayout
+            <!-- Monitor: waveform (top) over spectrogram (bottom), both visible -->
+            <LinearLayout
                 android:id="@+id/timelineContainer"
                 android:layout_width="match_parent"
-                android:layout_height="300dp"
+                android:layout_height="320dp"
                 android:layout_marginTop="8dp"
+                android:orientation="vertical"
                 android:background="@color/srp_bg">
 
                 <!-- Waveform view (main track) -->
                 <com.audiology2.stream.ui.WaveformView
                     android:id="@+id/mainWaveformView"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
 
-                <!-- Spectrogram overlay (toggleable) -->
+                <!-- Spectrogram (toggleable) -->
                 <com.audiology2.stream.ui.SpectrogramView
                     android:id="@+id/mainSpectrogramView"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
                     android:visibility="gone" />
 
-            </FrameLayout>
+            </LinearLayout>
 
             <!-- Multi-track timeline -->
             <com.audiology2.stream.ui.TrackTimelineView

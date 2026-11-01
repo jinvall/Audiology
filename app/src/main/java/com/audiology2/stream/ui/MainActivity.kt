@@ -156,6 +156,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
     /** Guards one-time auto-start of the live monitor on launch. */
     private var autoStartAttempted = false
 
+    /** When true, begin recording as soon as the capture service is up. */
+    private var pendingAutoRecord = false
+
     private val permissionContract =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
             val micGranted = perms[android.Manifest.permission.RECORD_AUDIO] != false
@@ -246,7 +249,15 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 binding.mainSpectrogramView.postInvalidate()
             }
             service?.registerRecordingCallback(recordingCallback!!)
-            
+
+            // Auto-record on launch (mic default): begin once capture is up.
+            if (pendingAutoRecord) {
+                pendingAutoRecord = false
+                binding.root.postDelayed({
+                    if (service != null && !service!!.isRecording()) startRecording()
+                }, 500)
+            }
+
             refreshStatus()
         }
 
@@ -413,7 +424,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         
         // View toggles
         binding.switchWaveform.isChecked = true
-        binding.switchSpectrogram.isChecked = false
+        binding.switchSpectrogram.isChecked = true
         binding.switchWaveform.setOnCheckedChangeListener { _, checked ->
             binding.mainWaveformView.visibility = if (checked) View.VISIBLE else View.GONE
         }
@@ -2578,6 +2589,11 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
                 chevron.text = if (expanded) "\u25BC" else "\u25B2" // ▼ collapsed / ▲ expanded
             }
         }
+
+        // Open the Editor card by default so the waveform + spectrogram monitor
+        // is visible immediately on launch.
+        binding.contentEditor.visibility = View.VISIBLE
+        binding.chevronEditor.text = "\u25B2"
     }
 
     // ---- Settings load/save ----
@@ -2890,10 +2906,13 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         // Playback capture needs an explicit MediaProjection grant -> manual start.
         if (readSettingsFromViews().capture.inputSource == InputSource.PLAYBACK) return
         if (hasMicPermission()) {
+            // Default source is the phone mic; start recording automatically too.
+            pendingAutoRecord = true
             startStreaming()
         } else {
             // requestNeededPermissions() asks; Start resumes automatically on grant.
             pendingStartAfterPermission = true
+            pendingAutoRecord = true
         }
     }
 
