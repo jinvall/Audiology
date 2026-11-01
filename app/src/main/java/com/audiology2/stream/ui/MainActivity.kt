@@ -440,7 +440,13 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             binding.trackTimelineView.clearPlayhead()
         }
         audioPlayer.onError = { msg ->
-            runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    Toast.makeText(applicationContext, msg, Toast.LENGTH_LONG).show()
+                } else {
+                    android.util.Log.w("Editor", "AudioPlayer error after destroy: $msg")
+                }
+            }
         }
     }
 

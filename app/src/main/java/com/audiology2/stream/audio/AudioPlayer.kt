@@ -222,16 +222,21 @@ class AudioPlayer(
     }
 
     private fun playInternal() {
-        audioTrack?.play()
-        
-        val fis = FileInputStream(currentFile!!)
-        val buffer = ByteArray(8192)
-        
+        var fis: FileInputStream? = null
         try {
+            // These can throw (AudioTrack IllegalStateException, missing file):
+            // keep them INSIDE the try so a failure reports via onError instead
+            // of becoming an uncaught coroutine exception that crashes the app.
+            audioTrack?.play()
+
+            val stream = FileInputStream(currentFile!!)
+            fis = stream
+            val buffer = ByteArray(8192)
+
             // Seek to current position
             val byteOffset = wavDataStart + currentPosition.get() * bytesPerFrame
-            fis.channel.position(byteOffset)
-            
+            stream.channel.position(byteOffset)
+
             var bytesRead: Int
             while (isPlaying.get() && !isPaused.get() && 
                    currentPosition.get() < totalFrames) {
@@ -248,12 +253,12 @@ class AudioPlayer(
                     if (currentPosition.get() >= loopEndFrame) {
                         seekToFrames(loopStartFrame)
                         // Reset the stream to the new position.
-                        fis.channel.position(wavDataStart + currentPosition.get() * bytesPerFrame)
+                        stream.channel.position(wavDataStart + currentPosition.get() * bytesPerFrame)
                         continue
                     }
                 }
 
-                bytesRead = fis.read(buffer)
+                bytesRead = stream.read(buffer)
                 if (bytesRead <= 0) break
                 
                 audioTrack?.write(buffer, 0, bytesRead)
@@ -281,7 +286,7 @@ class AudioPlayer(
                 onError?.invoke("Playback error: ${e.message}")
             }
         } finally {
-            try { fis.close() } catch (_: Exception) {}
+            try { fis?.close() } catch (_: Exception) {}
             isPlaying.set(false)
             if (!isPaused.get()) {
                 audioTrack?.stop()
