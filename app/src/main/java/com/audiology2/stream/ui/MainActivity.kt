@@ -374,13 +374,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         // Input monitoring (mic -> speaker).
         binding.monitorSwitch.onCheckedChanged = { on -> setInputMonitor(on) }
 
-        // Audio routing (output device for monitoring + playback).
-        binding.audioRouteSpinner.onItemSelected = object : android.widget.AdapterView.OnItemSelected {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                applyAudioRoute(position)
-            }
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
-        }
+// Audio routing (output device for monitoring + playback).
+        binding.audioRouteSpinner.onSELListener = { parent, view, position, _ -> applyAudioRoute(position) }
+
 
         // Gain rotary knob: -60..+60 dB
         binding.gainKnob.setOnValueChangeListener { value ->
@@ -2472,7 +2468,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             Toast.makeText(this, "Audio routing needs Android 6+", Toast.LENGTH_SHORT).show()
             return
         }
-        val am = getService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        val am = getApplicationContext().getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
         val outputs = am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
         val type = when (position) {
             1 -> android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
