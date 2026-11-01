@@ -2824,6 +2824,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         if (decimals <= 0) v.roundToInt().toString() else String.format("%.${decimals}f", v)
 
     private fun applySettingsToViews(s: AppSettings) {
+        // Status strip: show the actual receiver target (was the layout placeholder).
+        binding.remoteText.text = "${s.network.host}:${s.network.port} ${s.network.transport}"
+        binding.remoteText.setTextColor(getColor(R.color.srp_text_muted))
         // Console knobs mirror the loaded settings (silent: no listener loop).
         binding.knobHpfHz.setValueSilently(s.dsp.highPassHz.toDouble())
         binding.knobLpfHz.setValueSilently(s.dsp.lowPassHz.toDouble())

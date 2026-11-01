@@ -94,10 +94,20 @@ class SpectrogramView @JvmOverloads constructor(
 
     /** Update spectrogram data. Called from audio thread. */
     fun updateSpectrogram(newData: Array<FloatArray>, sampleRate: Int, fftSize: Int) {
-        this.spectrogramData = newData
         this.sampleRate = sampleRate
         this.fftSize = fftSize
         this.maxFreqHz = (sampleRate / 2).toDouble()
+        // ACCUMULATE history. Previously this replaced the data each callback,
+        // so only the last sliver of frames was kept and the view looked blank.
+        val maxFrames = 1024
+        val combined = ArrayList<FloatArray>(spectrogramData.size + newData.size)
+        combined.addAll(spectrogramData)
+        combined.addAll(newData)
+        spectrogramData = if (combined.size > maxFrames) {
+            combined.subList(combined.size - maxFrames, combined.size).toTypedArray()
+        } else {
+            combined.toTypedArray()
+        }
         dataVersion++
         cachedBitmap = null // Invalidate cache
         postInvalidate()

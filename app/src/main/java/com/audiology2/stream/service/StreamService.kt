@@ -49,6 +49,7 @@ class StreamService : Service() {
         const val EXTRA_PRESET_NAME = "preset"
         private const val TAG = "StreamService"
         private const val QUEUE_CAPACITY = 64
+        private const val MAX_RECORDING_MINUTES = 5L
     }
 
     interface Callback {
@@ -339,10 +340,17 @@ class StreamService : Service() {
     /** Called from capture thread to write audio samples to WAV file. */
     fun writeRecordingSamples(samples: FloatArray, framesRead: Int, channels: Int) {
         if (!isRecording || wavWriter == null) return
-        
+
         wavWriter!!.writeSamples(samples, framesRead, channels)
-        recordingSamples.addAndGet(framesRead.toLong())
-        
+        val total = recordingSamples.addAndGet(framesRead.toLong())
+
+        // Safety cap so auto-record can never fill device storage (it did: 3.1 GB).
+        val maxFrames = settings.network.sampleRate.toLong() * 60L * MAX_RECORDING_MINUTES
+        if (total >= maxFrames) {
+            Log.w(TAG, "Recording reached ${MAX_RECORDING_MINUTES} min cap - stopping")
+            mainHandler.post { stopRecording() }
+        }
+
         // Notify recording callbacks
         recordingCallbacks.forEach { it(samples, framesRead, channels) }
     }

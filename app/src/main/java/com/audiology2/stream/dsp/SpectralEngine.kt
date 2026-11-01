@@ -102,7 +102,9 @@ object SpectralEngine {
                 }
             }
             if (best < 0 || bestMag < 0.02f) return@repeat
-            val p = SpectralPeak(binFreq(best, sampleRate, fftSize), 0.0, bestMag.toDouble(), best)
+            // Real level for this partial (was hardcoded 0 dB for every peak).
+            val db = if (bestMag > 1e-5f) 20.0 * log10(linearMagnitude(bestMag)) else -120.0
+            val p = SpectralPeak(binFreq(best, sampleRate, fftSize), db, bestMag.toDouble(), best)
             peaks.add(p)
             for (i in (best - minGapBins).coerceAtLeast(0)..(best + minGapBins).coerceAtMost(n - 1)) {
                 used[i] = true
