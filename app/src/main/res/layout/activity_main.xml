@@ -285,6 +285,18 @@
                 android:text="Monitor input → speaker" />
 
             <Spinner
+                android:id="@+id/audioRouteSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/input_bg"
+                android:entries="@array/output_route_options"
+                android:padding="8dp"
+                android:spinnerMode="dropdown"
+                android:textColor="@color/srp_text"
+                android:textColorHint="@color/srp_text_subtle" />
+
+            <Spinner
                 android:id="@+id/inputSourceSpinner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

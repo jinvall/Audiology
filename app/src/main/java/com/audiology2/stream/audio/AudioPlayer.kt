@@ -37,7 +37,17 @@ class AudioPlayer(
     private var bytesPerFrame = 2
     private var wavDataStart = 0L
     private var wavDataSize = 0L
-    
+
+    /** Preferred output device (speaker/earpiece/wired/BT); null = default. */
+    private var preferredDevice: android.media.AudioDeviceInfo? = null
+
+    fun setPreferredOutputDevice(device: android.media.AudioDeviceInfo?) {
+        preferredDevice = device
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            runCatching { audioTrack?.setPreferredDevice(device) }
+        }
+    }
+
     // Callbacks
     var onPositionUpdate: ((Double) -> Unit)? = null
     var onPlaybackEnd: (() -> Unit)? = null

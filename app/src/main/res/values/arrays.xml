@@ -39,4 +39,12 @@
         <item>Raw / Unprocessed</item>
         <item>Stable Network</item>
     </string-array>
+
+    <string-array name="output_route_options">
+        <item>Default</item>
+        <item>Speaker</item>
+        <item>Earpiece</item>
+        <item>Wired</item>
+        <item>Bluetooth</item>
+    </string-array>
 </resources>
