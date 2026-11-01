@@ -73,3 +73,9 @@ app/src/main/java/com/audiology2/stream/databinding/
 # audiology2-release.keystore
 # User-moved recordings / artifacts
 recording_*.wav
+
+# User scratch / device artifacts
+*.url
+findings_report.md
+ui_shots/
+device_recordings_backup/

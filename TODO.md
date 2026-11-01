@@ -39,3 +39,21 @@
 - [ ] Track reorder by drag; color picker dialog; clip rename dialog
 - [ ] Third-party VST3/LV2 hosting = longer-term native-FFI task; internal plugin interface + preset JSON first
 - [ ] Reverb, chorus/flanger/phaser, reverse, DC-offset, normalize, stereo tools in the FX chain
+## 2026-11-01 — device sweep + console/spectral
+
+Done:
+- [x] Console controls (KnobView/VuMeterView/LedSwitch/ConsoleMath) + Processing console
+- [x] Spectral build: STFT engine, analyzer, lateral waterfall, clip editor, ops
+      (gain/mix/invert/master/diff/isolate/denoise), time-range targeting
+- [x] Fix blank monitor spectrogram (use analyzer view)
+- [x] Fix status strip target text; partials dB; auto-record 5-min cap
+- [x] MIDI editor layout + dark piano roll; NaN guards
+- [x] Presets switched UDP -> TCP
+
+Open:
+- [ ] Consolidate RotaryKnob vs KnobView
+- [ ] Knobs for Comp attack/release, Notch Q, Echo feedback
+- [ ] Harmonic -> sample (isolated partials onto the Beats track)
+- [ ] Analyzer options: log-frequency axis, dB floor, freeze
+- [ ] Opt-out for auto-record-on-launch / monitor
+- [ ] Monitor spectrogram selection -> clip creation (was disabled in the swap)

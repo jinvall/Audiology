@@ -56,3 +56,22 @@
 2. Ask the user the **API field in the Assistant** question (section 1).
 3. Collect sweep findings (user or free-you returns with `SWEEP_PLAN.md`-format report).
 4. Implement in smallest-green-commit order; push after each logical unit.
+---
+
+## Update 2026-11-01 (console + spectral + device sweep)
+
+- **HEAD:** `6ddd2cf`. 68/68 tests. Device `SM-S127DL` (Android 11) is reachable
+  over adb (`adb devices` shows it) — use it for real UI verification.
+- **Do not blindly delete device data.** The app's external recordings had
+  filled `/data` (3.1 GB); the 574 MB file was backed up to
+  `/home/jason/device_recordings_backup/` before deleting to free space.
+- **Console UI**: `KnobView`/`VuMeterView`/`LedSwitch`/`ConsoleMath`; Processing
+  card is a console. `RotaryKnob` (old gain dial) still coexists with `KnobView`.
+- **Spectral**: `SpectrumAnalyzerView` (live + static clip mode), clip selector
+  + clip spectrogram editor, ops gain/mix/invert/master/diff/isolate/denoise,
+  time-range targeting. Monitor spectrogram = the analyzer view now.
+- **Sweep fixes**: blank spectrogram, status target text, partials dB, auto-record
+  cap, MIDI button wrap + dark piano roll, NaN guards.
+- **Transport**: receiver (AMP, port 8090) is TCP; presets now TCP.
+- **Open**: consolidate knobs; knobs for Comp attack/release, Notch Q, Echo
+  feedback; harmonic->sample; analyzer options; auto-start opt-out.

@@ -222,3 +222,15 @@ This project is licensed under the terms of the LICENSE file in the root directo
 ---
 
 **Built with ❤️ for audio professionals who need studio tools on the go.**
+### 🎛️ Console UI (SRP)
+- **KnobView** rotary dials (vertical-drag, tick ring, value arc), **VuMeterView**
+  (peak-hold + clip LED), **LedSwitch** LED toggles, **ConsoleMath** (unit-tested)
+- Audio Processing card rebuilt as a mixing console (13 knobs, 12 LED toggles)
+
+### 📈 Spectral
+- **Spectroid-style analyzer**: live spectrum + **lateral interactive waterfall**
+  (time × frequency) with region selection and a peak marker
+- **Clip spectral editor**: clip selector + the selected clip's STFT rendered
+  with the same region selection
+- **Spectral ops** on the selection: gain, mix, invert, master, diff, isolate
+  (harmonics), denoise — STFT/ISTFT engine, time-range targeting, clip swap

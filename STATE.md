@@ -1,53 +1,60 @@
 # Audiology2 - Project State
 
-**Updated:** 2026-10-28 · **HEAD:** `1f52ec0` (master, pushed)
+**Updated:** 2026-11-01 · **HEAD:** `6ddd2cf` (master, pushed)
 
 ## Build Status
+- `./gradlew :app:assembleDebug` — BUILD SUCCESSFUL
+- `./gradlew :app:testDebugUnitTest` — **68 tests, 0 failures**
+- kotlin-test pinned to 1.9.20 (must match the Kotlin plugin).
 
-- ✅ `./gradlew :app:assembleDebug` — BUILD SUCCESSFUL
-- ✅ `./gradlew :app:testDebugUnitTest` — **57 tests, 0 failures**
-- kotlin-test pinned to `1.9.20` (must match Kotlin plugin; do not bump)
+## What the app is
+Android audio DAW: mic/playback capture → DSP → TCP/UDP stream (ASIO protocol) + a full multi-track editor, MIDI sequencer, Spectroid-style spectral analyzer + spectral clip editor, and a voice/text DAW assistant. Dark **SRP palette** (violet-black, green/cyan/violet accents, hunter-orange spectral peaks) with a **console** control set.
 
-## What this app is now
+## Recent work (2026-11-01)
 
-Android audio DAW: real-time capture → DSP → TCP/UDP stream (ASIO protocol) + full multi-track editor, MIDI sequencer, spectral analysis/editing, and a voice/text DAW assistant.
+### Console UI
+- `KnobView` (rotary dial, vertical-drag, tick ring, value arc), `VuMeterView`
+  (peak-hold + clip LED), `LedSwitch` (LED toggle), `ConsoleMath` (unit-tested).
+- Processing card rebuilt as a console: 13 knobs (FILTERS/EQ/COMP/SPACE-DRIVE),
+  12 LED toggles; numeric fields hidden but retained as the settings source.
+- Editor card opens by default; monitor = waveform (top) + spectrogram (bottom).
 
-## Feature status
+### Spectral build
+- `SpectralTransform` STFT/ISTFT engine; clip brush.
+- `SpectrumAnalyzerView`: live spectrum + **lateral interactive waterfall**
+  (time X, freq Y) with region selection; also a **static clip mode**
+  (`showFrames`) for the clip editor.
+- Spectral ops on the selection: **gain, mix, invert, master, diff, isolate,
+  denoise**; time-range targeting via the clip timeline selection.
+- Clip selector (spinner) + clip spectrogram editor in the Spectral card.
 
-### Streaming (working, latency fix landed)
-- Capture via `AudioRecord` (buffer 5–100ms configurable); DSP chain GAIN→AGC→NS→HP/LP/Notch→EQ→**Echo/Drive/Tremolo (live)**→Comp→Limiter
-- TCP fixed: `tcpNoDelay` + inbound socket **drain thread** (killed the window-collapse "massive delay"; `drainedBytes` counter not yet in UI)
-- UDP fallback; auto-reconnect; foreground service + wake lock; meters (RMS/Peak/clip/packets)
+### On-device UI sweep (Samsung SM-S127DL, Android 11) - findings + fixes
+- **Blank monitor spectrogram** -> replaced the monitor view with the working
+  `SpectrumAnalyzerView` (old `SpectrogramView` rendered blank); also made it
+  accumulate frames. **Fixed.**
+- **Status strip showed literal "host:port"** -> now shows the real
+  `<host>:<port> <transport>`. **Fixed.**
+- **Spectral partials all "0 dB"** -> `SpectralEngine.partials` computed db.
+  **Fixed.**
+- **Auto-record filled storage (3.1 GB, one 574 MB file)** -> 5-minute cap in
+  `StreamService`. **Fixed.**
+- **MIDI editor buttons wrapped vertically; piano roll was bright white** ->
+  scrollable non-wrapping row + dark SRP piano roll. **Fixed.**
+- **"Cannot round NaN value"** -> NaN/Inf guards in PcmEncoder, noteFromFreq,
+  TimeStretch, SnapGrid. **Fixed.**
+- **Transport was UDP** (receiver is TCP) -> user switched presets to TCP.
 
-### Editor / Timeline (working)
-- Multi-track timeline: headers, clip drag/resize (snap-aware), range selection, two-finger pan, loop region overlay + loop transport, MIDI clip blocks (purple)
-- Clip ops: add/delete track, split/duplicate/delete clip, **track properties** (name/volume/pan/mute/solo/arm/monitor)
-- **Pitch/Speed** (resample + SOLA time-stretch, pitch-shift cascade) and **FX dialogs** with preview + apply; **range editing** splits head/mid/tail
-- **Make Sample**: silence-trim + normalize + BPM-synced loop + placement on Beats track
-- Project persistence via DataStore (write-through), Projects dialog (new/open, starred current)
+## Known issues / open
+- Streaming still errors unless transport = TCP and host points at the receiver
+  (AMP AudioReceiver, port 8090).
+- `remoteText` error text appears transiently on send failure.
+- Auto-record is bounded (5 min) but still starts on launch by default.
+- `RotaryKnob` (existing gain dial) and `KnobView` (new) coexist — consolidate.
+- Remaining Processing params without knobs: Comp attack/release, Notch Q,
+  Echo feedback.
+- Harmonic->sample (isolated partials onto the Beats track) not implemented.
+- Auto-record + monitor start on launch; no opt-out toggle yet.
 
-### MIDI (working)
-- `MidiNote`/`MidiClip` on tracks; **piano-roll + drum/step modes** (tap-place, drag move/transpose, edge-resize, velocity long-press, pin-zoom)
-- `MidiSampler` renders clips from the track's sample pool (pitch-shifted melodic, drum one-shots), tempo-synced; **MIDI included in WAV/M4A export**
-
-### Spectral (working)
-- **Spectral Tools card**: live pitch/tuner notes+cents, peak (parabolic interp), F0 (HPS), centroid, partials; **Capture→MIDI note**; copy peak
-- **Spectral clip editor**: STFT/ISTFT (COLA Hann, 75% overlap) rectangular time×freq gain mask, per-channel resynthesis, destructive with undo
-- Spectrogram: live feed registered on service connect (race fixed), **hunter-orange strongest-stop SRP gradient**, drag-selection → clip from last recording
-
-### Assistant (working, free tier)
-- `assist/` package: strict-JSON tool intents over OpenAI-compatible `/chat/completions`; 10 tools wired to real DAW functions; **default = OpenRouter free** (`https://openrouter.ai/api/v1`, `openai/gpt-oss-120b:free`)
-- Voice: on-device `SpeechRecognizer` (no key); API key AES-GCM in Android Keystore
-- Verified NOT viable on this host: local Ollama (N100 ≈ 3–8 tok/s; measured 0.5 tok/s under load) — kept as offline preset only
-
-## Known issues (see AGENT_PASSDOWN.md / SWEEP_PLAN.md)
-
-1. **Export mixer still renders test tones, not clip audio** (`AudioExporter.kt:306`) — the one real placeholder; next implementation priority
-2. Field recording produced 26s of digital silence (header perfect, samples zero) — capture instrumentation is a sweep item
-3. `WavUtils` reads-but-discards `audioFormat` (PCM vs float) — auto-detect branch planned
-4. Dead-but-kept files: `data/ProjectDatabase.kt`, `data/ProjectJsonHelper.kt` (flagged)
-5. MainActivity (~2,200 lines) pending breakout into controllers
-
-## Sweep notice
-
-The user runs a read+run-only sweep in a free session per `SWEEP_PLAN.md`; findings return here for joint implementation.
+## Environment
+- `silver` (N100, 16 GB) runs AMP; device over adb (`SM-S127DL`).
+- Dead-but-kept files: `data/ProjectDatabase.kt`, `data/ProjectJsonHelper.kt`.

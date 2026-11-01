@@ -21,3 +21,24 @@ Working notes between user and assistant. Latest first.
 - MIDI: custom Canvas piano-roll/step view (no third-party libs).
 - Spectral: STFT/ISTFT engine + rectangular mask brush; strongest gradient stop = hunter orange #FF4F00.
 - Assistant: strict-JSON intent contract (provider-agnostic), encrypted key, OpenRouter default.
+## 2026-11-01 — Console + spectral build; on-device UI sweep
+
+- **Console UI**: KnobView / VuMeterView / LedSwitch / ConsoleMath; the Audio
+  Processing card is a console (13 knobs + 12 LED toggles). SRP palette kept;
+  the old RotaryKnob (gain) still exists alongside KnobView.
+- **Spectral**: STFT/ISTFT engine, Spectroid-style analyzer (spectrum + lateral
+  interactive waterfall), static clip mode, clip selector + clip spectrogram
+  editor, and ops: gain / mix / invert / master / diff / isolate / denoise,
+  with time-range targeting.
+- **Device sweep (SM-S127DL, Android 11)** using adb (device was online). Found
+  and fixed: blank monitor spectrogram (switched to the analyzer view), status
+  showing "host:port", partials all 0 dB, auto-record filling storage (3.1 GB
+  -> 5-min cap), MIDI button wrapping + white piano roll, and a "Cannot round
+  NaN value" crash path (NaN guards).
+- **Storage**: device /data was 100% full. The app's recordings/ held 52 WAVs
+  (3.1 GB). The single 574 MB auto-recording was backed up to
+  `/home/jason/device_recordings_backup/` and then deleted to free space.
+- **Transport**: app was streaming UDP to a TCP-only receiver -> "sent" packets
+  went nowhere. User changed presets to TCP.
+- **Rule reminder**: user wants the synth/RGRD "system-wide" controls, all SRP,
+  nothing erased. Ask before deleting device/user data.
