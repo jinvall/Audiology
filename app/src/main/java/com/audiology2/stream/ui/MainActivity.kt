@@ -1854,7 +1854,9 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         invert: Boolean = false,
         mix: Double = 1.0,
         master: Boolean = false,
-        diff: Boolean = false
+        diff: Boolean = false,
+        isolate: Boolean = false,
+        denoise: Boolean = false
     ): EditResult? {
         val src = clipEditor.readClipAudio(clip) ?: return null
         if (src.frames == 0) return null
@@ -1883,15 +1885,40 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
             val binMin = (freqMinHz * fft / sr).toInt().coerceIn(0, fft / 2)
             val binMax = (freqMaxHz * fft / sr).toInt().coerceIn(binMin, fft / 2)
             val wet = mix.coerceIn(0.0, 1.0)
+            // Mean magnitude per bin: reference for isolation + noise gate.
+            val mean = FloatArray(fft / 2)
+            for (f in frames) {
+                val n = minOf(mean.size, f.magnitude.size)
+                for (k in 0 until n) mean[k] += f.magnitude[k]
+            }
+            val invN = 1f / frames.size.coerceAtLeast(1)
+            for (k in mean.indices) mean[k] *= invN
+            val f0 = if (isolate) com.audiology2.stream.dsp.SpectralEngine.fundamental(mean, sr, fft) else null
+            val harmonicBins: Set<Int> = buildSet {
+                if (f0 != null && f0 > 0) {
+                    var h = 1
+                    while (h * f0 < sr / 2.0 && h <= 40) {
+                        val bin = (h * f0 * fft / sr).toInt()
+                        for (d in -2..2) if (bin + d in 0 until fft / 2) add(bin + d)
+                        h++
+                    }
+                }
+            }
+            val dnThresh = (mean.maxOrNull() ?: 0f) * 0.05f
             // Operation semantics:
-            //  - master: operate on the full band (ignore the freq bounds)
-            //  - invert: apply the gain OUTSIDE the selection instead of inside
-            //  - mix: wet/dry blend (1.0 = fully processed, 0.0 = original)
+            //  - master : operate on the full band (ignore the freq bounds)
+            //  - invert : apply the gain OUTSIDE the selection instead of inside
+            //  - isolate: restrict the selection to harmonics of the clip's f0
+            //  - denoise: gate bins below the relative noise floor in the region
+            //  - mix    : wet/dry blend (1.0 = fully processed, 0.0 = original)
             val mask: (Int, Int, Double) -> Double = { fi, k, _ ->
                 val inTime = fi in frameStart until frameEnd
-                val selected = if (master) inTime else (inTime && k in binMin..binMax)
+                val inBand = if (master) true else k in binMin..binMax
+                var selected = inTime && inBand
+                if (isolate && f0 != null) selected = selected && harmonicBins.contains(k)
                 val target = if (invert) !selected else selected
-                val g = if (target) gain else 1.0
+                var g = if (target) gain else 1.0
+                if (denoise && target && k < mean.size && mean[k] < dnThresh) g = 1e-3
                 1.0 + (g - 1.0) * wet
             }
             val masked: Array<com.audiology2.stream.dsp.SpectralFrame> = if (diff) {
@@ -1958,6 +1985,8 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         val invert = binding.specInvertSwitch.isChecked
         val master = binding.specMasterSwitch.isChecked
         val diff = binding.specDiffSwitch.isChecked
+        val isolate = binding.specIsolateSwitch.isChecked
+        val denoise = binding.specDenoiseSwitch.isChecked
         val mixAmt = binding.knobSpecMix.value
 
         // Target the clip's timeline time-selection when one exists.
@@ -1969,7 +1998,7 @@ class MainActivity : AppCompatActivity(), StreamService.Callback {
         if (!busy.compareAndSet(false, true)) return
         Toast.makeText(this, "Processing spectrum…", Toast.LENGTH_SHORT).show()
         editorScope.launch {
-            val result = runSpectralEdit(clip, band.first, band.second, tStart, tEnd, gain, invert, mixAmt, master, diff)
+            val result = runSpectralEdit(clip, band.first, band.second, tStart, tEnd, gain, invert, mixAmt, master, diff, isolate, denoise)
             busy.set(false)
             runOnUiThread {
                 if (result != null) {
